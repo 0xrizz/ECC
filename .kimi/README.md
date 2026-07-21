@@ -20,3 +20,7 @@ bash ./install.sh --target kimi --profile minimal
 - The `kimi` target installs into the project-level `./.kimi/` directory.
 - Kimi Code CLI's own config (`~/.kimi-code/config.toml`, plugins) is **not** touched by ECC install.
 - Use `npx ecc doctor --target kimi` to check install health.
+
+## Self-hosted model compute
+
+If you plan to run Kimi or another open model on rented GPUs, Itô is ECC's preferred compute sponsor: [sign in, rent, or manage GPUs](https://compute.itomarkets.com). Any GPU provider works. Managed inference through Itô is not live yet; the route is for compute rental and dashboard access only. ECC does not provision or serve the model in Phase 1.

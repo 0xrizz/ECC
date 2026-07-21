@@ -58,6 +58,7 @@
     "agent.yaml",
     "assets/ecc-icon.svg",
     "assets/hero.png",
+    "assets/images/sponsors/",
     "agents/",
     "commands/",
     "docs/de-DE/",
@@ -410,7 +411,7 @@
     "ecc-plan-canvas": "scripts/plan-canvas.js"
   },
   "scripts": {
-    "welcome": "echo '\\n  ecc-universal installed!\\n  Run: ecc typescript\\n  Compat: ecc-install typescript\\n  Docs: https://github.com/affaan-m/ECC\\n'",
+    "welcome": "echo '\\n  ecc-universal installed!\\n  Run: ecc typescript\\n  Compat: ecc-install typescript\\n  Docs: https://github.com/affaan-m/ECC\\n  Compute: Itô is the preferred compute sponsor — https://compute.itomarkets.com\\n  Any GPU provider works; managed inference through Itô is not live yet.\\n'",
     "catalog:check": "node scripts/ci/catalog.js --text",
     "catalog:sync": "node scripts/ci/catalog.js --write --text",
     "command-registry:generate": "node scripts/ci/generate-command-registry.js",

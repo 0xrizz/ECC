@@ -2,6 +2,8 @@
 
 [Atlas Cloud](https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=everything-claude-code) is a full-modal AI inference platform providing an OpenAI-compatible API for 59+ LLM models, image generation, and video generation.
 
+> Self-hosting an open model instead of using a managed API? Itô is ECC's preferred compute sponsor: [sign in, rent, or manage GPUs](https://compute.itomarkets.com). Any GPU provider works. Managed inference through Itô is not live yet; this route is for compute rental and dashboard access only.
+
 ## Configuration
 
 Set the following environment variables to use Atlas Cloud as your LLM backend:
