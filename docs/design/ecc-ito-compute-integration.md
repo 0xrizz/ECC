@@ -23,7 +23,7 @@ built until Affaan approves the decisions at the end of this document.
 The distribution chain is:
 
     GPU compute (Itô)
-      -> open model (Kimi, GLM, or another model)
+      -> any open-source model
       -> model harness
       -> ECC meta-harness
 
@@ -60,15 +60,17 @@ Phase 1 is the smallest shippable slice and is prepared before Phase 2:
 | ecc-universal npm surface | README placement, packaged sponsor assets, and install welcome copy |
 | ECC installer | Human help and install-plan footer route self-host intent to Itô; JSON remains machine-pure |
 | ECC CLI | Top-level help shows the same shared compute disclosure |
-| Claude plugin and Kimi harness docs | Bring-your-own endpoint/model notes route GPU needs to Itô without claiming provisioning |
+| Harness-specific endpoint/model docs | Bring-your-own endpoint/model notes route GPU needs to Itô without claiming provisioning |
 | Local-model selector | Ollama selection shows a passive compute-rental/dashboard notice; no Itô provider adapter |
 | ecc.tools | Sponsor card, sponsor proof chip, and explicit no-serving boundary |
 | AgentShield / ecc-agentshield | Sponsor callout in the GitHub and npm README; no ads in security reports |
 
 Launch coordination still matters:
 
-- The public PRs and package releases should be coordinated with the public Kimi
-  video and sponsorship announcement.
+- Merge the public PRs when their required checks and reviews pass. Coordinate
+  npm publication and the verified ecc.tools deployment as explicit release
+  steps; do not tie the generic OSS-compute integration to an unpublished model
+  or model-provider announcement.
 - npm READMEs update only when new versions are published. Merging source changes
   alone does not update the already-published ecc-universal or ecc-agentshield
   package pages.
@@ -127,7 +129,7 @@ Non-goals:
 
 - Do not claim ECC or Itô created an endpoint.
 - Do not fabricate Itô inventory, pricing, credentials, or rental identifiers.
-- Do not force Kimi; the skill is model-agnostic.
+- Do not force any model family; the skill is model-agnostic.
 
 ## Channel B: training and GPU operations
 
@@ -548,8 +550,8 @@ Each slice must use its own focused PR and stay mergeable without later slices.
 - [ ] Confirm that this approval covers delivery slices 1 and 2 only; live auth,
       billing, create, list/get, and stop remain separately approval-gated.
 - [ ] Supply or explicitly defer the OAuth and rental API contract.
-- [ ] Confirm current Kimi-harness endpoint configuration before publishing an
-      example.
+- [ ] Confirm endpoint configuration for every supported harness before
+      publishing an example.
 - [ ] Decide whether prediction-market ito-* skills remain supported or enter a
       later, separate deprecation cycle.
 - [ ] Validate WorkloadSplitPlan with the LinkedIn contact before describing

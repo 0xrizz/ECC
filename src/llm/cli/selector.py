@@ -36,12 +36,13 @@ def print_self_host_compute_notice(provider: str) -> None:
         return
 
     print(
-        "\nItô is ECC's preferred compute sponsor: "
+        "\nRun or self-host any open-source model. "
+        "Itô is ECC's preferred compute sponsor: "
         "https://compute.itomarkets.com"
     )
     print(
-        "Any GPU provider works. Managed inference through Itô is not live yet; "
-        "the route is for sign-in, compute rental, and dashboard access only."
+        "Any GPU provider works. ECC only links to the Itô dashboard; it does not "
+        "provision compute or serving. Managed inference through Itô is not live yet."
     )
 
 

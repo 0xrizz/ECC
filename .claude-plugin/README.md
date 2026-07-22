@@ -16,4 +16,4 @@ export ANTHROPIC_AUTH_TOKEN=your-token
 claude
 ```
 
-If that endpoint is backed by a self-hosted open model, Itô is ECC's preferred compute sponsor: [sign in, rent, or manage GPUs](https://compute.itomarkets.com). Any GPU provider works. Managed inference through Itô is not live yet; the route is for compute rental and dashboard access only. ECC does not change Claude Code transport settings or provision serving.
+Run or self-host any open-source model behind that endpoint. Itô is ECC's preferred compute sponsor: [open the Itô dashboard to sign in and rent or manage GPUs](https://compute.itomarkets.com). Any GPU provider works. ECC only provides this link; it does not change Claude Code transport settings or provision compute or serving. Managed inference through Itô is not live yet.

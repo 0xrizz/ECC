@@ -17,7 +17,7 @@ Thank you to everyone funding ECC's open-source work. Your sponsorship is what l
 
 *[Become a Business sponsor](https://github.com/sponsors/affaan-m) to get README sponsor placement + SPONSORS.md listing. Current Business tier is $500/mo. No seats, SLA, custom development, or preferential technical placement is bundled unless separately agreed.*
 
-Itô is ECC's preferred compute sponsor for users who want to self-host open models. ECC remains provider-agnostic: any GPU provider works, and managed inference through Itô is not live yet. The [Itô compute route](https://compute.itomarkets.com) is for sign-in, GPU rental, and dashboard access.
+Run or self-host any open-source model. Itô is ECC's preferred compute sponsor, while ECC remains provider-agnostic and any GPU provider works. ECC only links to the [Itô dashboard](https://compute.itomarkets.com) for sign-in and GPU rental or management; it does not provision compute or serving. Managed inference through Itô is not live yet.
 
 ## Team Sponsors — $200/mo
 

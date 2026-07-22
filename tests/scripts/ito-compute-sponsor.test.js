@@ -9,7 +9,17 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const REPO_ROOT = path.join(__dirname, '..', '..');
-const COMPUTE_URL = 'https://compute.itomarkets.com';
+const URL_TOKEN_PATTERN = /https?:\/\/[^\s<>"'`(){}\\]+/g;
+const EXPECTED_COMPUTE_ROUTE = Object.freeze({
+  protocol: 'https:',
+  hostname: 'compute.itomarkets.com',
+  port: '',
+  username: '',
+  password: '',
+  pathname: '/',
+  search: '',
+  hash: '',
+});
 
 function read(relativePath) {
   return fs.readFileSync(path.join(REPO_ROOT, relativePath), 'utf8');
@@ -27,9 +37,29 @@ function runTest(name, fn) {
   }
 }
 
+function isExactComputeRoute(candidate) {
+  try {
+    const parsed = new URL(candidate.replace(/[.,;:!?]+$/, ''));
+    return Object.entries(EXPECTED_COMPUTE_ROUTE).every(
+      ([property, expected]) => parsed[property] === expected
+    );
+  } catch {
+    return false;
+  }
+}
+
+function assertExactComputeRoute(content) {
+  const candidates = content.match(URL_TOKEN_PATTERN) || [];
+  assert.ok(
+    candidates.some(isExactComputeRoute),
+    'Should include the exact Itô compute route'
+  );
+}
+
 function assertHonestComputeCopy(content) {
-  assert.ok(content.includes(COMPUTE_URL), 'Should route compute intent to Ito');
+  assertExactComputeRoute(content);
   assert.match(content, /preferred compute sponsor/i);
+  assert.match(content, /run or self-host any open-source model/i);
   assert.match(content, /any GPU provider/i);
   assert.match(content, /managed inference[^\n.]*not live/i);
 }
@@ -41,13 +71,26 @@ function main() {
   let failed = 0;
 
   const tests = [
+    ['compute route validation rejects deceptive lookalike hosts', () => {
+      const deceptiveCopy = [
+        'Itô is the preferred compute sponsor:',
+        'https://compute.itomarkets.com.attacker.example',
+        'Any GPU provider works.',
+        'Managed inference through Itô is not live.',
+      ].join(' ');
+
+      assert.throws(
+        () => assertHonestComputeCopy(deceptiveCopy),
+        /exact Itô compute route/
+      );
+    }],
     ['README exposes the sponsor logo and honest self-hosting route', () => {
       const readme = read('README.md');
       assert.ok(readme.includes('assets/images/sponsors/ito.svg'));
       assertHonestComputeCopy(readme);
       assert.match(
         readme,
-        /custom API endpoint or model gateway[\s\S]*Self-hosting the model behind that gateway[\s\S]*compute\.itomarkets\.com/
+        /custom API endpoint or model gateway[\s\S]*Run or self-host any open-source model behind that gateway[\s\S]*ECC only links to the Itô dashboard/
       );
       const sponsorMark = read('assets/images/sponsors/ito.svg');
       assert.match(sponsorMark, /<path\b/);
@@ -61,14 +104,20 @@ function main() {
       const sponsors = read('SPONSORS.md');
       assert.ok(sponsors.includes('[**Itô**]'));
       assert.ok(sponsors.includes('assets/images/sponsors/ito.svg'));
-      assert.ok(sponsors.includes(COMPUTE_URL));
+      assertExactComputeRoute(sponsors);
     }],
     ['inference guide distinguishes rental compute from managed serving', () => {
       assertHonestComputeCopy(read('docs/ATLAS-CLOUD-GUIDE.md'));
     }],
-    ['Claude plugin and Kimi harness docs route self-host intent without lock-in', () => {
+    ['harness docs route generic open-source model intent without lock-in', () => {
       assertHonestComputeCopy(read('.claude-plugin/README.md'));
       assertHonestComputeCopy(read('.kimi/README.md'));
+    }],
+    ['Phase 2 plan keeps its thesis and release framing generic', () => {
+      const plan = read('docs/design/ecc-ito-compute-integration.md');
+      assert.match(plan, /-> any open-source model/);
+      assert.doesNotMatch(plan, /public Kimi|Moonshot|video and sponsorship/i);
+      assert.match(plan, /Status: \*\*Proposed/);
     }],
     ['top-level CLI help exposes the provider-neutral compute route', () => {
       const result = spawnSync('node', ['scripts/ecc.js', '--help'], {
@@ -108,7 +157,8 @@ function main() {
     ['npm package publishes the Ito mark and welcome route', () => {
       const packageJson = JSON.parse(read('package.json'));
       assert.ok(packageJson.files.includes('assets/images/sponsors/'));
-      assert.ok(packageJson.scripts.welcome.includes(COMPUTE_URL));
+      assertExactComputeRoute(packageJson.scripts.welcome);
+      assert.match(packageJson.scripts.welcome, /run or self-host any open-source model/i);
       assert.ok(fs.existsSync(path.join(REPO_ROOT, 'assets', 'images', 'sponsors', 'ito.svg')));
     }],
   ];

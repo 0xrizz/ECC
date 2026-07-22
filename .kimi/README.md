@@ -23,4 +23,4 @@ bash ./install.sh --target kimi --profile minimal
 
 ## Self-hosted model compute
 
-If you plan to run Kimi or another open model on rented GPUs, Itô is ECC's preferred compute sponsor: [sign in, rent, or manage GPUs](https://compute.itomarkets.com). Any GPU provider works. Managed inference through Itô is not live yet; the route is for compute rental and dashboard access only. ECC does not provision or serve the model in Phase 1.
+Run or self-host any open-source model—including Kimi—on owned or rented GPUs. Itô is ECC's preferred compute sponsor: [open the Itô dashboard to sign in and rent or manage GPUs](https://compute.itomarkets.com). Any GPU provider works. ECC only provides this link; it does not provision compute or serving. Managed inference through Itô is not live yet.
