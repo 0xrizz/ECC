@@ -17,7 +17,7 @@ functionality.
 ## Where the skill lives
 
 The full skill definition and its runtime ship in the `cli/` directory of
-`https://github.com/Ito-Markets/agentic-otc-compute-platform` at the
+`https://www.npmjs.com/package/ito-compute-cli` at the
 ECC-standard cross-harness skills path:
 
 ```text
@@ -30,7 +30,7 @@ boundaries, and the honesty rules agents must preserve.
 
 ## Install
 
-1. Clone `https://github.com/Ito-Markets/agentic-otc-compute-platform` and
+1. Clone `https://www.npmjs.com/package/ito-compute-cli` and
    build the CLI from its `cli/` directory:
 
    ```sh
