@@ -232,7 +232,7 @@ function runCommand(commandName, args) {
     {
       cwd: process.cwd(),
       env: commandName === 'ito'
-        ? createSafeItoEnvironment(process.env, { includeControls: true })
+        ? { ...createSafeItoEnvironment(process.env, { includeControls: true }) }
         : process.env,
       encoding: 'utf8',
       maxBuffer: 10 * 1024 * 1024,

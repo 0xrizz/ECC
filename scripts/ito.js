@@ -206,7 +206,7 @@ function defaultOpenUrl(url) {
   }
 
   const result = spawnSync(executable, args, {
-    env: createSafeItoEnvironment(process.env),
+    env: { ...createSafeItoEnvironment(process.env) },
     stdio: "ignore",
     windowsHide: true,
     shell: false,

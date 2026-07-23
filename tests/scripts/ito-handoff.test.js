@@ -268,7 +268,8 @@ function main() {
       assert.match(result.stdout, /no supported structured ECC intake/i)
     }],
     ["npm welcome remains POSIX-safe around apostrophes", () => {
-      const result = spawnSync("npm", ["run", "welcome"], {
+      const npmExecutable = process.platform === "win32" ? "npm.cmd" : "npm"
+      const result = spawnSync(npmExecutable, ["run", "welcome"], {
         cwd: REPO_ROOT,
         encoding: "utf8",
       })
