@@ -572,6 +572,32 @@
       "stability": "beta"
     },
     {
+      "id": "gpu-compute",
+      "kind": "skills",
+      "description": "Provider-neutral GPU compute procurement: the ito-compute skill wraps the ito CLI/MCP live RFQ workflow and explicitly labeled paper reserve/run flows.",
+      "paths": [
+        "skills/ito-compute"
+      ],
+      "targets": [
+        "claude",
+        "claude-project",
+        "cursor",
+        "antigravity",
+        "codex",
+        "opencode",
+        "codebuddy",
+        "joycode",
+        "qwen",
+        "zed"
+      ],
+      "dependencies": [
+        "platform-configs"
+      ],
+      "defaultInstall": false,
+      "cost": "light",
+      "stability": "beta"
+    },
+    {
       "id": "social-distribution",
       "kind": "skills",
       "description": "Social publishing and distribution skills.",

@@ -195,6 +195,14 @@
       ]
     },
     {
+      "id": "capability:gpu-compute",
+      "family": "capability",
+      "description": "Provider-neutral GPU compute procurement through the ito compute CLI, MCP server, and agent skill.",
+      "modules": [
+        "gpu-compute"
+      ]
+    },
+    {
       "id": "capability:social",
       "family": "capability",
       "description": "Social publishing and distribution skills.",
