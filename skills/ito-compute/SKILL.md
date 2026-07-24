@@ -16,33 +16,27 @@ functionality.
 
 ## Where the skill lives
 
-The full skill definition and its runtime ship in the `cli/` directory of
-`https://www.npmjs.com/package/ito-compute-cli` at the
-ECC-standard cross-harness skills path:
-
-```text
-cli/.agents/skills/ito-compute/SKILL.md
-```
-
-That file is the canonical skill: it defines the `ito_auth`, `ito_find`,
-`ito_lock`, `ito_status`, and `ito_run` tool workflow, the live/demo mode
-boundaries, and the honesty rules agents must preserve.
+This file (`skills/ito-compute/SKILL.md` in the ECC repo) is the canonical
+skill: it defines the `ito_auth`, `ito_find`, `ito_lock`, `ito_status`, and
+`ito_run` tool workflow, the live/demo mode boundaries, and the honesty rules
+agents must preserve. The CLI and MCP server that back it ship as the
+`ito-compute-cli` npm package (publishing soon; it is bundled with the Itô
+runtime today).
 
 ## Install
 
-1. Clone `https://www.npmjs.com/package/ito-compute-cli` and
-   build the CLI from its `cli/` directory:
+1. Install the CLI once the npm package is live:
 
    ```sh
-   cd cli
-   npm ci
-   npm run check
-   npm link
+   npm i -g ito-compute-cli
    ```
 
-2. Point the harness's skill discovery at the repo's `cli/.agents/skills/`
-   directory, or copy `cli/.agents/skills/ito-compute/` into the harness's
-   skills directory (for Claude Code: `~/.claude/skills/`).
+   Until then the skill's paper mode still documents the workflow end to end,
+   and Itô design partners get the CLI directly from the Itô team.
+
+2. This skill installs with ECC's normal skill discovery (it lives at
+   `skills/ito-compute/`), or copy it into the harness's skills directory
+   (for Claude Code: `~/.claude/skills/`).
 
 3. Configure the `ito-compute` stdio MCP server from the repo's README. Paper
    mode requires `ITO_CLI_DEMO=1`; live mode requires `ITO_API_KEY` injected
