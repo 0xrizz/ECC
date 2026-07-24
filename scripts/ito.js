@@ -257,7 +257,9 @@ function invokeIto(executable, args, environment = process.env) {
   const result = spawnSync(invocation.executable, invocation.args, {
     cwd: process.cwd(),
     encoding: "utf8",
-    env: createSafeItoInvocationEnvironment(environment, args),
+    // Keep policy helpers immutable for callers, but give child-process
+    // instrumentation its own mutable copy (for example NODE_V8_COVERAGE).
+    env: { ...createSafeItoInvocationEnvironment(environment, args) },
     maxBuffer: MAX_OUTPUT_BYTES,
     timeout: isNodeQualification ? NODE_QUALIFICATION_TIMEOUT_MS : undefined,
     shell: false,
