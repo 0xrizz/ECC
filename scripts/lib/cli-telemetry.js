@@ -537,11 +537,6 @@ async function recordCommandUsage(options = {}) {
     const env = options.env || process.env;
     if (getHardOverride(env)) return { sent: false, reason: 'disabled' };
 
-    const initial = readConsentState(options);
-    if (initial.state !== 'valid' || !initial.value.enabled) {
-      return { sent: false, reason: 'disabled' };
-    }
-
     let endpoint;
     try {
       endpoint = resolveTelemetryEndpoint(env);
