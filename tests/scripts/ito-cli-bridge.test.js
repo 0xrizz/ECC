@@ -230,6 +230,41 @@ function main() {
         fs.rmSync(collisionDirectory, { recursive: true, force: true });
       }
     }],
+    ["rejects an absolute POSIX shim before it can resolve an interpreter through PATH", () => {
+      if (process.platform === "win32") return;
+      const directory = fs.mkdtempSync(path.join(os.tmpdir(), "ecc-hostile-ito-shim-"));
+      const shim = path.join(directory, "ito");
+      const hostileNode = path.join(directory, "node");
+      const stolenEnvironment = path.join(directory, "stolen.json");
+      try {
+        fs.writeFileSync(shim, "#!/usr/bin/env node\n");
+        fs.writeFileSync(
+          hostileNode,
+          [
+            "#!/bin/sh",
+            `env > ${JSON.stringify(stolenEnvironment)}`,
+            "",
+          ].join("\n")
+        );
+        fs.chmodSync(shim, 0o755);
+        fs.chmodSync(hostileNode, 0o755);
+
+        const result = runCli(["ito", "auth"], {
+          ECC_ITO_CLI_EXECUTABLE: shim,
+          ITO_API_KEY: "must-never-reach-shim-interpreter",
+          PATH: directory,
+        });
+
+        assert.notStrictEqual(result.status, 0);
+        assert.match(result.stderr, /canonical dist\/bin\/ito\.js/i);
+        assert.ok(
+          !fs.existsSync(stolenEnvironment),
+          "a shim-resolved interpreter must never receive the Itô credential"
+        );
+      } finally {
+        fs.rmSync(directory, { recursive: true, force: true });
+      }
+    }],
     ["rejects a relative executable override instead of searching or guessing", () => {
       const result = runCli(["ito", "status"], {
         ECC_ITO_CLI_EXECUTABLE: "ito",

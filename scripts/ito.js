@@ -127,6 +127,11 @@ function assertUsableExecutable(candidate) {
       `${EXECUTABLE_OVERRIDE} does not point to a readable local Itô CLI file.`
     );
   }
+  if (path.extname(canonicalCandidate).toLowerCase() !== ".js") {
+    throw new Error(
+      `${EXECUTABLE_OVERRIDE} must point to the canonical dist/bin/ito.js entry.`
+    );
+  }
   if (!isUsableExecutable(canonicalCandidate)) {
     throw new Error(
       `${EXECUTABLE_OVERRIDE} does not point to a readable local Itô CLI file.`
@@ -139,11 +144,7 @@ function isUsableExecutable(candidate) {
   try {
     const info = fs.statSync(candidate);
     if (!info.isFile()) return false;
-    if (process.platform !== "win32" && path.extname(candidate) !== ".js") {
-      fs.accessSync(candidate, fs.constants.X_OK);
-    } else {
-      fs.accessSync(candidate, fs.constants.R_OK);
-    }
+    fs.accessSync(candidate, fs.constants.R_OK);
     return true;
   } catch {
     return false;
@@ -151,21 +152,15 @@ function isUsableExecutable(candidate) {
 }
 
 function buildInvocation(executable, args) {
-  if (path.extname(executable).toLowerCase() === ".js") {
-    return Object.freeze({
-      executable: process.execPath,
-      args: Object.freeze([executable, ...args]),
-    });
-  }
-  if (
-    process.platform === "win32"
-    && /\.(?:bat|cmd|ps1)$/i.test(executable)
-  ) {
+  if (path.extname(executable).toLowerCase() !== ".js") {
     throw new Error(
-      `Refusing to invoke the Itô CLI through a shell shim. Set ${EXECUTABLE_OVERRIDE} to the absolute dist/bin/ito.js path.`
+      `Refusing to invoke an Itô CLI shim. Set ${EXECUTABLE_OVERRIDE} to the absolute dist/bin/ito.js path.`
     );
   }
-  return Object.freeze({ executable, args: Object.freeze([...args]) });
+  return Object.freeze({
+    executable: process.execPath,
+    args: Object.freeze([executable, ...args]),
+  });
 }
 
 function invokeIto(executable, args, environment = process.env) {
