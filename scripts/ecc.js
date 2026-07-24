@@ -5,6 +5,7 @@ const path = require('path');
 const { listAvailableLanguages } = require('./lib/install-executor');
 const { getComputeSponsorCopy } = require('./lib/compute-sponsor');
 const { createSafeItoEnvironment } = require('./lib/ito-environment');
+const { recordCommandUsage } = require('./lib/cli-telemetry');
 
 const COMMANDS = {
   install: {
@@ -30,6 +31,10 @@ const COMMANDS = {
   ito: {
     script: 'ito.js',
     description: 'Invoke the separately installed canonical Itô compute CLI',
+  },
+  telemetry: {
+    script: 'telemetry.js',
+    description: 'Control optional privacy-safe CLI usage telemetry (default off)',
   },
   'install-plan': {
     script: 'install-plan.js',
@@ -92,6 +97,7 @@ const PRIMARY_COMMANDS = [
   'consult',
   'control-pane',
   'ito',
+  'telemetry',
   'list-installed',
   'doctor',
   'repair',
@@ -141,6 +147,10 @@ Examples:
   ecc ito auth
   ecc ito find --gpu h200 --count 8 --nodes 1 --gpus-per-node 8 --days 30 --storage-tb 1 --start-window 2099-08-15 --max-rate 3.00 --form-factor bare_metal --contract-type reservation --fabric infiniband --region us-east-1
   ecc ito status --json
+  ecc telemetry status
+  ecc telemetry preview --command consult --result success --latency-ms 250
+  ecc telemetry enable
+  ECC_TELEMETRY=0 ecc doctor
   ecc list-installed --json
   ecc doctor --target cursor
   ecc repair --dry-run
@@ -268,7 +278,17 @@ function runCommand(commandName, args) {
   return 1;
 }
 
-function main() {
+async function recordCommandUsageSafely(input, recorder = recordCommandUsage) {
+  try {
+    return await recorder(input);
+  } catch {
+    return { sent: false, reason: 'telemetry_unavailable' };
+  }
+}
+
+async function main() {
+  let trackedCommand = null;
+  const startedAt = Date.now();
   try {
     const resolution = resolveCommand(process.argv);
 
@@ -289,11 +309,39 @@ function main() {
       return;
     }
 
-    process.exitCode = runCommand(resolution.command, resolution.args);
+    trackedCommand = resolution.command;
+    const exitCode = runCommand(resolution.command, resolution.args);
+    if (trackedCommand !== 'telemetry' && trackedCommand !== 'ito') {
+      await recordCommandUsageSafely({
+        commandId: trackedCommand,
+        exitCode,
+        elapsedMs: Date.now() - startedAt,
+      });
+    }
+    process.exitCode = exitCode;
   } catch (error) {
     console.error(`Error: ${error.message}`);
-    process.exit(1);
+    if (trackedCommand && trackedCommand !== 'telemetry' && trackedCommand !== 'ito') {
+      await recordCommandUsageSafely({
+        commandId: trackedCommand,
+        exitCode: 1,
+        elapsedMs: Date.now() - startedAt,
+      });
+    }
+    process.exitCode = 1;
   }
 }
 
-main();
+if (require.main === module) {
+  main().catch(error => {
+    console.error(`Error: ${error.message}`);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = Object.freeze({
+  main,
+  recordCommandUsageSafely,
+  resolveCommand,
+  runCommand,
+});

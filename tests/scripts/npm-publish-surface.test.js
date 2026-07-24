@@ -51,6 +51,7 @@ function buildExpectedPublishPaths(repoRoot) {
     "scripts/discussion-audit.js",
     "scripts/doctor.js",
     "scripts/status.js",
+    "scripts/telemetry.js",
     "scripts/sessions-cli.js",
     "scripts/work-items.js",
     "scripts/install-apply.js",
@@ -90,6 +91,7 @@ function buildExpectedPublishPaths(repoRoot) {
     "assets/hero.png",
     "docs/CODEX-NAVIGATION-GUIDE.md",
     "docs/COMMAND-AGENT-MAP.md",
+    "docs/architecture/optional-cli-usage-telemetry.md",
     "assets/images/sponsors",
   ]
   const exclusionPaths = [
@@ -145,6 +147,7 @@ function main() {
         "scripts/consult.js",
         "scripts/control-pane.js",
         "scripts/ito.js",
+        "scripts/telemetry.js",
         "scripts/discussion-audit.js",
         "scripts/operator-readiness-dashboard.js",
         "scripts/preview-pack-smoke.js",
@@ -166,6 +169,9 @@ function main() {
         "assets/hero.png",
         "docs/CODEX-NAVIGATION-GUIDE.md",
         "docs/COMMAND-AGENT-MAP.md",
+        "docs/architecture/optional-cli-usage-telemetry.md",
+        "schemas/ecc-cli-telemetry-event.schema.json",
+        "schemas/ecc-cli-telemetry-deletion.schema.json",
         "schemas/install-state.schema.json",
         "skills/backend-patterns/SKILL.md",
       ]) {

@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/affaan-m/ECC/schemas/ecc-cli-telemetry-event.schema.json",
+  "title": "ECC privacy-safe CLI usage event",
+  "description": "The complete allowlist for an explicitly opted-in ECC CLI usage event. No command arguments or user/workspace data are permitted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "anonymousId",
+    "packageName",
+    "packageVersion",
+    "commandId",
+    "result",
+    "latencyBucket",
+    "os",
+    "arch"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ecc.cli-telemetry.v1"
+    },
+    "anonymousId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Random pseudonymous identifier rotated every 30 days."
+    },
+    "packageName": {
+      "const": "ecc-universal"
+    },
+    "packageVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
+    "commandId": {
+      "enum": [
+        "install",
+        "plan",
+        "catalog",
+        "consult",
+        "control-pane",
+        "list-installed",
+        "doctor",
+        "repair",
+        "auto-update",
+        "status",
+        "platform-audit",
+        "security-ioc-scan",
+        "sessions",
+        "work-items",
+        "session-inspect",
+        "loop-status",
+        "uninstall",
+        "other"
+      ]
+    },
+    "result": {
+      "enum": [
+        "success",
+        "failure"
+      ]
+    },
+    "latencyBucket": {
+      "enum": [
+        "under_100ms",
+        "100ms_to_1s",
+        "1s_to_10s",
+        "10s_or_more"
+      ]
+    },
+    "os": {
+      "enum": [
+        "macos",
+        "linux",
+        "windows",
+        "other"
+      ]
+    },
+    "arch": {
+      "enum": [
+        "arm64",
+        "x64",
+        "other"
+      ]
+    }
+  }
+}

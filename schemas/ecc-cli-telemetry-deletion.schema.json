@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/affaan-m/ECC/schemas/ecc-cli-telemetry-deletion.schema.json",
+  "title": "ECC CLI telemetry deletion request",
+  "description": "The complete payload for an explicit telemetry deletion request.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "anonymousIds"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ecc.cli-telemetry-deletion.v1"
+    },
+    "anonymousIds": {
+      "type": "array",
+      "description": "Identifiers bound to the same original collection endpoint.",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      }
+    }
+  }
+}

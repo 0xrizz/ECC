@@ -29,6 +29,7 @@ function runCli(args, options = {}) {
     maxBuffer: 10 * 1024 * 1024,
     env: {
       ...process.env,
+      ECC_TELEMETRY: '0',
       ...envOverrides,
     },
   });

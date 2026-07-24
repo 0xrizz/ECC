@@ -1876,6 +1876,21 @@ ECC takes supply-chain and agent safety seriously.
 - **Built-in guardrails.** GateGuard gates destructive shell commands (including `rm`, force/path `git checkout`, and destructive `find -exec`) before they run; the supply-chain IOC scanner runs in CI; and [AgentShield](#agentshield--security-auditor) audits your own agent, hook, MCP, permission, and secret surfaces (`/security-scan`).
 - **Deep dive.** See the [Security Guide](./the-security-guide.md).
 
+### Optional CLI usage telemetry
+
+CLI telemetry is **off by default** and never runs during package installation.
+Only `ecc telemetry enable` persists consent; `ECC_TELEMETRY=0` is a hard
+override. Use `ecc telemetry preview` to inspect the complete local event and
+`ecc telemetry schema` to print its public allowlist. Events never contain
+arguments, prompts, paths, usernames, repository names, credentials, RFQs, or
+supplier/demand data; sponsor-specific commands are excluded from collection.
+Delivery is inert unless an HTTPS endpoint is separately configured, and
+deletion remains bound to every original receiving endpoint.
+
+See the
+[optional telemetry architecture and privacy contract](docs/architecture/optional-cli-usage-telemetry.md)
+before configuring collection.
+
 ---
 
 ## Sponsors
