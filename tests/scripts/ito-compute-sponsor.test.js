@@ -93,6 +93,7 @@ function main() {
     ['README exposes the sponsor logo and honest self-hosting route', () => {
       const readme = read('README.md');
       assert.ok(readme.includes('assets/images/sponsors/ito.svg'));
+      assert.ok(readme.includes('assets/images/sponsors/ito-dark.svg'));
       assertHonestComputeCopy(readme);
       assert.match(
         readme,
@@ -105,6 +106,9 @@ function main() {
       assert.match(sponsorMark, />ô</);
       assert.match(sponsorMark, />MARKETS</);
       assert.match(sponsorMarkDark, /viewBox="0 0 280 40"/);
+      assert.match(sponsorMarkDark, />It</);
+      assert.match(sponsorMarkDark, />ô</);
+      assert.match(sponsorMarkDark, />MARKETS</);
       assert.match(sponsorMarkDark, /fill="#F8FAFC"/i);
       assert.doesNotMatch(
         `${sponsorMark}\n${sponsorMarkDark}`,
@@ -190,7 +194,7 @@ function main() {
       assert.match(packageJson.scripts.welcome, /submits a live authenticated RFQ/i);
       assert.match(packageJson.scripts.welcome, /does not reserve capacity/i);
       assert.ok(fs.existsSync(path.join(REPO_ROOT, 'assets', 'images', 'sponsors', 'ito.svg')));
-      assert.ok(fs.existsSync(path.join(REPO_ROOT, 'assets', 'images', 'sponsors', 'moonshot.svg')));
+      assert.ok(fs.existsSync(path.join(REPO_ROOT, 'assets', 'images', 'sponsors', 'moonshot.png')));
     }],
   ];
 
