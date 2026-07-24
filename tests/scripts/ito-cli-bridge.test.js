@@ -13,7 +13,14 @@ const { spawnSync } = require("child_process");
 
 const REPO_ROOT = path.join(__dirname, "..", "..");
 const ECC_SCRIPT = path.join(REPO_ROOT, "scripts", "ecc.js");
+const ITO_SCRIPT = path.join(REPO_ROOT, "scripts", "ito.js");
 const CANONICAL_PACKAGE = "Ito-Markets/ito-cloud-runtime/cli/ito-compute-cli";
+const {
+  NODE_QUALIFICATION_TIMEOUT_MS,
+} = require("../../scripts/ito");
+const {
+  createSafeItoInvocationEnvironment,
+} = require("../../scripts/lib/ito-environment");
 
 function runCli(args, environment = {}) {
   return spawnSync(process.execPath, [ECC_SCRIPT, ...args], {
@@ -80,8 +87,8 @@ function main() {
   console.log("\n=== Testing ECC × Itô real CLI bridge ===\n");
 
   const tests = [
-    ["forwards only the reviewed CLI surface to an explicit local executable", () => {
-      for (const command of ["auth", "find", "status", "evals"]) {
+    ["forwards only the reviewed RFQ CLI surface to an explicit local executable", () => {
+      for (const command of ["auth", "find", "status"]) {
         const probe = makeItoProbe();
         try {
           const result = runCli(["ito", command], {
@@ -156,6 +163,8 @@ function main() {
       const probe = makeItoProbe();
       try {
         const configDirectory = path.join(probe.directory, "qualification");
+        fs.mkdirSync(configDirectory);
+        fs.writeFileSync(path.join(configDirectory, "sixtytwo.yaml"), "suite: full\n");
         const result = runCli([
           "ito",
           "evals",
@@ -170,6 +179,7 @@ function main() {
           ITO_INVENTORY_URL: "https://edge.example.test",
           ITO_ENABLE_SIXTYTWO_LIVE: "1",
           SIXTYTWO_API_TOKEN: "sixtytwo-test-token",
+          SIXTYTWO_TOKEN: "sixtytwo-legacy-test-token",
           SSH_AUTH_SOCK: "/tmp/ecc-test-agent.sock",
           ITO_CLI_DEMO: "1",
           ITO_CLI_STATE_DIR: "/tmp/forbidden-paper-state",
@@ -187,6 +197,7 @@ function main() {
         ]);
         assert.strictEqual(invocation.env.ITO_ENABLE_SIXTYTWO_LIVE, "1");
         assert.strictEqual(invocation.env.SIXTYTWO_API_TOKEN, "sixtytwo-test-token");
+        assert.strictEqual(invocation.env.SIXTYTWO_TOKEN, "sixtytwo-legacy-test-token");
         assert.strictEqual(invocation.env.SSH_AUTH_SOCK, "/tmp/ecc-test-agent.sock");
         assert.strictEqual(invocation.env.ITO_API_KEY, undefined);
         assert.strictEqual(invocation.env.ITO_API_URL, undefined);
@@ -198,6 +209,115 @@ function main() {
       } finally {
         fs.rmSync(probe.directory, { recursive: true, force: true });
       }
+    }],
+    ["rejects every incomplete live qualification before spawning", () => {
+      const validArgs = [
+        "ito",
+        "evals",
+        "--cluster", "clu_prod_example",
+        "--live-sixtytwo",
+        "--nodes", "gpu-01,gpu-02",
+      ];
+      const cases = [
+        {
+          label: "missing environment opt-in",
+          args: [...validArgs, "--config-dir", "__CONFIG__"],
+          env: {},
+          error: /ITO_ENABLE_SIXTYTWO_LIVE=1/,
+        },
+        {
+          label: "missing live flag",
+          args: validArgs.filter((value) => value !== "--live-sixtytwo")
+            .concat("--config-dir", "__CONFIG__"),
+          env: { ITO_ENABLE_SIXTYTWO_LIVE: "1" },
+          error: /--live-sixtytwo/,
+        },
+        {
+          label: "missing nodes",
+          args: [
+            "ito", "evals",
+            "--cluster", "clu_prod_example",
+            "--live-sixtytwo",
+            "--config-dir", "__CONFIG__",
+          ],
+          env: { ITO_ENABLE_SIXTYTWO_LIVE: "1" },
+          error: /--nodes/,
+        },
+        {
+          label: "missing cluster",
+          args: [
+            "ito", "evals",
+            "--live-sixtytwo",
+            "--nodes", "gpu-01",
+            "--config-dir", "__CONFIG__",
+          ],
+          env: { ITO_ENABLE_SIXTYTWO_LIVE: "1" },
+          error: /--cluster/,
+        },
+        {
+          label: "relative config directory",
+          args: [...validArgs, "--config-dir", "relative/config"],
+          env: { ITO_ENABLE_SIXTYTWO_LIVE: "1" },
+          error: /absolute/,
+        },
+        {
+          label: "missing config directory",
+          args: [...validArgs, "--config-dir", "__MISSING_CONFIG__"],
+          env: { ITO_ENABLE_SIXTYTWO_LIVE: "1" },
+          error: /sixtytwo\.yaml/,
+        },
+      ];
+
+      for (const testCase of cases) {
+        const probe = makeItoProbe();
+        try {
+          const configDirectory = path.join(probe.directory, "qualification");
+          fs.mkdirSync(configDirectory);
+          fs.writeFileSync(path.join(configDirectory, "sixtytwo.yaml"), "suite: full\n");
+          const args = testCase.args.map((value) => (
+            value === "__CONFIG__"
+              ? configDirectory
+              : value === "__MISSING_CONFIG__"
+                ? path.join(probe.directory, "missing")
+                : value
+          ));
+          const result = runCli(args, {
+            ECC_ITO_CLI_EXECUTABLE: probe.executable,
+            ...testCase.env,
+          });
+          assert.notStrictEqual(result.status, 0, testCase.label);
+          assert.match(result.stderr, testCase.error, testCase.label);
+          assert.ok(
+            !fs.existsSync(probe.log),
+            `${testCase.label} must not spawn the canonical Itô CLI`,
+          );
+        } finally {
+          fs.rmSync(probe.directory, { recursive: true, force: true });
+        }
+      }
+    }],
+    ["classifies Itō child environments once and fails closed on unknown prefixes", () => {
+      const safe = createSafeItoInvocationEnvironment(
+        {
+          PATH: process.env.PATH,
+          ECC_ITO_CLI_EXECUTABLE: "/operator/canonical/ito.js",
+          ITO_API_KEY: "must-not-cross",
+          SIXTYTWO_TOKEN: "must-not-cross",
+        },
+        ["--future-ecc-flag", "evals"],
+        { includeControls: true },
+      );
+      assert.strictEqual(safe.ECC_ITO_CLI_EXECUTABLE, "/operator/canonical/ito.js");
+      assert.strictEqual(safe.ITO_API_KEY, undefined);
+      assert.strictEqual(safe.SIXTYTWO_TOKEN, undefined);
+    }],
+    ["bounds the outer node-qualification process beyond the canonical timeout", () => {
+      assert.strictEqual(NODE_QUALIFICATION_TIMEOUT_MS, 31 * 60 * 1000);
+      const source = fs.readFileSync(ITO_SCRIPT, "utf8");
+      assert.match(
+        source,
+        /timeout: isNodeQualification \? NODE_QUALIFICATION_TIMEOUT_MS : undefined/,
+      );
     }],
     ["rejects unsupported browser, paper, and execution operations before spawning", () => {
       for (const command of ["rent", "lock", "run", "inference", "mcp"]) {

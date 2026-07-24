@@ -4,7 +4,7 @@ const { spawnSync } = require('child_process');
 const path = require('path');
 const { listAvailableLanguages } = require('./lib/install-executor');
 const { getComputeSponsorCopy } = require('./lib/compute-sponsor');
-const { createSafeItoEnvironment } = require('./lib/ito-environment');
+const { createSafeItoInvocationEnvironment } = require('./lib/ito-environment');
 
 const COMMANDS = {
   install: {
@@ -107,7 +107,7 @@ const PRIMARY_COMMANDS = [
 ];
 
 function showHelp(exitCode = 0) {
-  console.log(`
+  process.stdout.write(`
 ECC selective-install CLI
 
 Usage:
@@ -227,22 +227,15 @@ function runCommand(commandName, args) {
   if (!command) {
     throw new Error(`Unknown command: ${commandName}`);
   }
-  const itoSubcommand = args[0] === '--json' ? args[1] : args[0];
-  const isItoNodeQualification = commandName === 'ito' && itoSubcommand === 'evals';
-
   const result = spawnSync(
     process.execPath,
     [path.join(__dirname, command.script), ...args],
     {
       cwd: process.cwd(),
       env: commandName === 'ito'
-        ? {
-          ...createSafeItoEnvironment(process.env, {
-            includeControls: true,
-            includeItoRuntime: !isItoNodeQualification,
-            includeItoEvals: isItoNodeQualification,
-          }),
-        }
+        ? createSafeItoInvocationEnvironment(process.env, args, {
+          includeControls: true,
+        })
         : process.env,
       encoding: 'utf8',
       maxBuffer: 10 * 1024 * 1024,

@@ -42,6 +42,7 @@ const ECC_ITO_CONTROL_KEYS = Object.freeze([
   "ECC_ITO_CLI_EXECUTABLE",
   "NODE_ENV",
 ]);
+const ITO_RUNTIME_COMMANDS = new Set(["auth", "find", "status"]);
 
 function copyDefined(source, target, key) {
   if (typeof source[key] === "string") {
@@ -79,10 +80,24 @@ function createSafeItoEnvironment(source = process.env, options = {}) {
   return Object.freeze(safe);
 }
 
+function createSafeItoInvocationEnvironment(
+  source = process.env,
+  args = [],
+  options = {},
+) {
+  const command = args.filter((value) => value !== "--json")[0];
+  return createSafeItoEnvironment(source, {
+    includeControls: options.includeControls === true,
+    includeItoRuntime: ITO_RUNTIME_COMMANDS.has(command),
+    includeItoEvals: command === "evals",
+  });
+}
+
 module.exports = Object.freeze({
   ECC_ITO_CONTROL_KEYS,
   ITO_EVAL_ENVIRONMENT_KEYS,
   ITO_RUNTIME_ENVIRONMENT_KEYS,
   SYSTEM_ENVIRONMENT_KEYS,
   createSafeItoEnvironment,
+  createSafeItoInvocationEnvironment,
 });

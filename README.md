@@ -1228,9 +1228,10 @@ skill](skills/ito-compute/SKILL.md) for the full RFQ authority and MCP setup
 contract.
 
 `find` submits a live authenticated RFQ. It does not reserve capacity.
-`evals` requires the canonical CLI's double opt-in, a separately installed
-`sixtytwo-cli==0.3.33`, an explicit node list, and an existing absolute
-configuration directory. It cannot rent, launch, recover, repair, or purchase.
+`evals` requires both `ITO_ENABLE_SIXTYTWO_LIVE=1` and `--live-sixtytwo`, a
+separately installed `sixtytwo-cli==0.3.33`, an explicit node list, and an
+existing absolute configuration directory. It cannot rent, launch, recover,
+repair, or purchase.
 ECC exposes no quote lock, purchase, workload, or inference path, and it never
 replaces a missing client or failed live call with a local result.
 

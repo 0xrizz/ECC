@@ -70,7 +70,8 @@ environment. It does not inspect or log the key.
   or agent must gather every hard topology/economic constraint and obtain
   explicit buyer authority before invoking it.
 - `status` reads current RFQ and procurement status.
-- `evals` runs only the canonical CLI's double-opt-in
+- `evals` requires both `ITO_ENABLE_SIXTYTWO_LIVE=1` and
+  `--live-sixtytwo`, then runs only the canonical CLI's pinned
   `sixtytwo-cli==0.3.33` qualification adapter against an explicit node list
   and existing absolute configuration directory. It receives no `ITO_API_KEY`
   or unrelated cloud/model credentials and cannot rent, launch, recover,
