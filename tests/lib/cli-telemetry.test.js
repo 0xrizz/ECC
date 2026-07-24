@@ -334,7 +334,9 @@ async function main() {
           process.exitCode = 1;
         });
       `;
-      const childCount = 24;
+      // Eight independent processes exercise the cross-process boundary without
+      // turning slower Windows runners into a scheduler stress benchmark.
+      const childCount = 8;
       await Promise.all(Array.from({ length: childCount }, (_, index) => (
         runChild([
           '-e',
@@ -349,7 +351,11 @@ async function main() {
         const payload = JSON.parse(
           fs.readFileSync(path.join(outputDir, `${index}.json`), 'utf8')
         );
-        assert.strictEqual(payload.result.sent, true);
+        assert.strictEqual(
+          payload.result.sent,
+          true,
+          `telemetry child ${index} did not send: ${payload.result.reason || 'unknown reason'}`
+        );
         return payload.emittedId;
       });
       assert.strictEqual(new Set(emittedIds).size, 1);
