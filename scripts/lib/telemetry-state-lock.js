@@ -24,20 +24,21 @@ function processIsAlive(pid) {
 }
 
 function recoverStaleLock(lockPath, nowMs) {
+  let descriptor;
   let stat;
-  try {
-    stat = fs.statSync(lockPath);
-  } catch {
-    return false;
-  }
-
   let owner = null;
   try {
-    owner = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+    descriptor = fs.openSync(lockPath, 'r');
+    stat = fs.fstatSync(descriptor);
+    owner = JSON.parse(fs.readFileSync(descriptor, 'utf8'));
   } catch {
     // A process can die between exclusive creation and completing the owner
     // record. The mtime still provides a conservative stale threshold.
+  } finally {
+    if (descriptor !== undefined) fs.closeSync(descriptor);
   }
+  if (!stat) return false;
+
   const createdAtMs = Number(owner?.createdAtMs);
   const ageMs = nowMs - Math.max(
     Number.isFinite(createdAtMs) ? createdAtMs : 0,
@@ -46,14 +47,32 @@ function recoverStaleLock(lockPath, nowMs) {
   if (ageMs < STALE_MS) return false;
   if (owner && processIsAlive(Number(owner.pid))) return false;
 
+  // Serialize recovery for this exact inode. Once this exclusive guard exists,
+  // no cooperating process can replace the checked lock before the rename.
+  const recoveryPath = `${lockPath}.recover-${stat.dev}-${stat.ino}`;
   const stalePath = `${lockPath}.stale-${process.pid}-${crypto.randomBytes(6).toString('hex')}`;
+  let recoveryDescriptor;
   try {
+    recoveryDescriptor = fs.openSync(recoveryPath, 'wx', 0o600);
+    fs.writeFileSync(recoveryDescriptor, JSON.stringify({
+      pid: process.pid,
+      createdAtMs: nowMs,
+    }), 'utf8');
     fs.renameSync(lockPath, stalePath);
   } catch {
     return false;
+  } finally {
+    if (recoveryDescriptor !== undefined) {
+      fs.closeSync(recoveryDescriptor);
+      try {
+        fs.unlinkSync(recoveryPath);
+      } catch {
+        // A failed recovery attempt must not affect the wrapped command.
+      }
+    }
   }
   try {
-    fs.unlinkSync(stalePath);
+    fs.rmSync(stalePath, { force: true });
   } catch {
     // A stale lock already moved out of the active path cannot block progress.
   }
