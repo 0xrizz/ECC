@@ -321,6 +321,7 @@ async function main() {
           commandId: 'doctor',
           exitCode: 0,
           elapsedMs: 1,
+          lockTimeoutMs: 10000,
           transport: async (_endpoint, event) => { emittedId = event.anonymousId; },
         }).then(result => {
           fs.writeFileSync(
