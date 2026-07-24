@@ -244,6 +244,18 @@ function main() {
           error: /--nodes/,
         },
         {
+          label: "empty node list",
+          args: [
+            "ito", "evals",
+            "--cluster", "clu_prod_example",
+            "--live-sixtytwo",
+            "--nodes", ",",
+            "--config-dir", "__CONFIG__",
+          ],
+          env: { ITO_ENABLE_SIXTYTWO_LIVE: "1" },
+          error: /--nodes/,
+        },
+        {
           label: "missing cluster",
           args: [
             "ito", "evals",

@@ -86,7 +86,7 @@ function requiredOptionValue(args, option) {
     throw new Error(`${option} is required exactly once for live node qualification.`);
   }
   const value = args[indexes[0] + 1];
-  if (!value || value.startsWith("--")) {
+  if (!value?.trim() || value.startsWith("--")) {
     throw new Error(`${option} requires a non-empty value for live node qualification.`);
   }
   return value;
@@ -104,7 +104,10 @@ function validateNodeQualificationArgs(args, environment) {
     );
   }
   requiredOptionValue(args, "--cluster");
-  requiredOptionValue(args, "--nodes");
+  const nodes = requiredOptionValue(args, "--nodes");
+  if (!nodes.split(",").every((node) => node.trim().length > 0)) {
+    throw new Error("--nodes must explicitly list one or more non-empty nodes.");
+  }
   const configDirectory = requiredOptionValue(args, "--config-dir");
   if (!path.isAbsolute(configDirectory)) {
     throw new Error("--config-dir must be an existing absolute directory.");
