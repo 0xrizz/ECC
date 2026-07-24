@@ -20,6 +20,7 @@ const {
 } = require("../../scripts/ito");
 const {
   createSafeItoInvocationEnvironment,
+  getInvocationCommand,
 } = require("../../scripts/lib/ito-environment");
 
 function runCli(args, environment = {}) {
@@ -322,6 +323,11 @@ function main() {
       assert.strictEqual(safe.ECC_ITO_CLI_EXECUTABLE, "/operator/canonical/ito.js");
       assert.strictEqual(safe.ITO_API_KEY, undefined);
       assert.strictEqual(safe.SIXTYTWO_TOKEN, undefined);
+    }],
+    ["detects the Itō command consistently with or without the global JSON flag", () => {
+      assert.strictEqual(getInvocationCommand(["auth"]), "auth");
+      assert.strictEqual(getInvocationCommand(["--json", "evals"]), "evals");
+      assert.strictEqual(getInvocationCommand([]), undefined);
     }],
     ["bounds the outer node-qualification process beyond the canonical timeout", () => {
       assert.strictEqual(NODE_QUALIFICATION_TIMEOUT_MS, 31 * 60 * 1000);

@@ -7,6 +7,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 const {
   createSafeItoInvocationEnvironment,
+  getInvocationCommand,
 } = require("./lib/ito-environment");
 
 const SUPPORTED_COMMANDS = Object.freeze(["auth", "find", "status", "evals"]);
@@ -252,7 +253,7 @@ function buildInvocation(executable, args) {
 
 function invokeIto(executable, args, environment = process.env) {
   const invocation = buildInvocation(executable, args);
-  const command = args[0] === "--json" ? args[1] : args[0];
+  const command = getInvocationCommand(args);
   const isNodeQualification = command === "evals";
   const result = spawnSync(invocation.executable, invocation.args, {
     cwd: process.cwd(),

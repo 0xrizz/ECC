@@ -80,12 +80,16 @@ function createSafeItoEnvironment(source = process.env, options = {}) {
   return Object.freeze(safe);
 }
 
+function getInvocationCommand(args = []) {
+  return args.filter((value) => value !== "--json")[0];
+}
+
 function createSafeItoInvocationEnvironment(
   source = process.env,
   args = [],
   options = {},
 ) {
-  const command = args.filter((value) => value !== "--json")[0];
+  const command = getInvocationCommand(args);
   return createSafeItoEnvironment(source, {
     includeControls: options.includeControls === true,
     includeItoRuntime: ITO_RUNTIME_COMMANDS.has(command),
@@ -100,4 +104,5 @@ module.exports = Object.freeze({
   SYSTEM_ENVIRONMENT_KEYS,
   createSafeItoEnvironment,
   createSafeItoInvocationEnvironment,
+  getInvocationCommand,
 });
