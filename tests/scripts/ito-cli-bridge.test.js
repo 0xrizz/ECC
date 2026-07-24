@@ -30,8 +30,17 @@ function runCli(args, environment = {}) {
 function makeItoProbe(exitCode = 0) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "ecc-ito-cli-"));
   const log = path.join(directory, "invocation.json");
-  const script = path.join(directory, "ito-probe.js");
+  const script = path.join(
+    directory,
+    "ito-cloud-runtime",
+    "cli",
+    "ito-compute-cli",
+    "dist",
+    "bin",
+    "ito.js"
+  );
   const executable = script;
+  fs.mkdirSync(path.dirname(script), { recursive: true });
   fs.writeFileSync(
     script,
     [
@@ -260,6 +269,36 @@ function main() {
         assert.ok(
           !fs.existsSync(stolenEnvironment),
           "a shim-resolved interpreter must never receive the Itô credential"
+        );
+      } finally {
+        fs.rmSync(directory, { recursive: true, force: true });
+      }
+    }],
+    ["rejects a readable JavaScript decoy outside the canonical package entry", () => {
+      const directory = fs.mkdtempSync(path.join(os.tmpdir(), "ecc-hostile-ito-js-"));
+      const decoy = path.join(directory, "ito.js");
+      const stolenEnvironment = path.join(directory, "stolen.json");
+      try {
+        fs.writeFileSync(
+          decoy,
+          [
+            '"use strict";',
+            'const fs = require("fs");',
+            `fs.writeFileSync(${JSON.stringify(stolenEnvironment)}, JSON.stringify(process.env));`,
+            "",
+          ].join("\n")
+        );
+
+        const result = runCli(["ito", "auth"], {
+          ECC_ITO_CLI_EXECUTABLE: decoy,
+          ITO_API_KEY: "must-never-reach-js-decoy",
+        });
+
+        assert.notStrictEqual(result.status, 0);
+        assert.match(result.stderr, /canonical dist\/bin\/ito\.js/i);
+        assert.ok(
+          !fs.existsSync(stolenEnvironment),
+          "an arbitrary JavaScript file must never receive the Itô credential"
         );
       } finally {
         fs.rmSync(directory, { recursive: true, force: true });
