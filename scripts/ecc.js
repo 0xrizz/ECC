@@ -141,6 +141,7 @@ Examples:
   ecc ito auth
   ecc ito find --gpu h200 --count 8 --nodes 1 --gpus-per-node 8 --days 30 --storage-tb 1 --start-window 2099-08-15 --max-rate 3.00 --form-factor bare_metal --contract-type reservation --fabric infiniband --region us-east-1
   ecc ito status --json
+  ecc ito evals --cluster clu_prod_example --live-sixtytwo --nodes gpu-01,gpu-02 --config-dir /absolute/path/to/qualification-config
   ecc list-installed --json
   ecc doctor --target cursor
   ecc repair --dry-run
@@ -226,6 +227,8 @@ function runCommand(commandName, args) {
   if (!command) {
     throw new Error(`Unknown command: ${commandName}`);
   }
+  const itoSubcommand = args[0] === '--json' ? args[1] : args[0];
+  const isItoNodeQualification = commandName === 'ito' && itoSubcommand === 'evals';
 
   const result = spawnSync(
     process.execPath,
@@ -236,7 +239,8 @@ function runCommand(commandName, args) {
         ? {
           ...createSafeItoEnvironment(process.env, {
             includeControls: true,
-            includeItoRuntime: true,
+            includeItoRuntime: !isItoNodeQualification,
+            includeItoEvals: isItoNodeQualification,
           }),
         }
         : process.env,

@@ -7,7 +7,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 const { createSafeItoEnvironment } = require("./lib/ito-environment");
 
-const SUPPORTED_COMMANDS = Object.freeze(["auth", "find", "status"]);
+const SUPPORTED_COMMANDS = Object.freeze(["auth", "find", "status", "evals"]);
 const CANONICAL_REPOSITORY = "https://github.com/Ito-Markets/ito-cloud-runtime.git";
 const CANONICAL_PACKAGE_PATH = "cli/ito-compute-cli";
 const CANONICAL_ENTRY_SEGMENTS = Object.freeze([
@@ -27,16 +27,20 @@ Usage:
   ecc ito auth
   ecc ito find <all required RFQ options>
   ecc ito status
-  ecc ito <auth|find|status> --json
+  ecc ito evals --cluster <id> --live-sixtytwo --nodes <list> --config-dir <dir>
+  ecc ito <auth|find|status|evals> --json
 
 The bridge invokes the separately installed canonical Itô CLI and returns its
 real stdout, stderr, and exit code unchanged. It performs no browser navigation
-and adds no lock, workload, inference, evaluation, or purchase path.
+and adds no lock, workload, inference, or purchase path.
 
 Important:
   - "find" reads live inventory and submits an authenticated RFQ.
   - Obtain explicit buyer authority and every hard constraint before invoking it.
   - "status" reads live RFQ and procurement status.
+  - "evals" invokes only the canonical CLI's double-opt-in, pinned
+    sixtytwo-cli node-qualification adapter against explicit nodes.
+  - Node qualification cannot rent, launch, recover, repair, or purchase.
   - Inventory and RFQs are not reservations; only a returned firm quote is firm.
 
 The canonical package is currently unpublished. Install it locally:
@@ -61,6 +65,10 @@ Configure the MCP command as "node" with this absolute argument:
 
 Inject ITO_API_KEY into the child process from 1Password or the launching
 environment. Never put the key in arguments, tracked files, or chat.
+
+Live node qualification requires ITO_ENABLE_SIXTYTWO_LIVE=1,
+--live-sixtytwo, an explicit node list, and an existing absolute config
+directory. The canonical CLI requires sixtytwo-cli==0.3.33 and fails closed.
 `);
 }
 
@@ -90,7 +98,7 @@ function parseArgs(argv, environment = process.env) {
   const command = withoutJson.shift();
   if (!SUPPORTED_COMMANDS.includes(command)) {
     throw new Error(
-      `Unsupported Itô command "${command || "(missing)"}"; ECC permits only auth, find, and status.`
+      `Unsupported Itô command "${command || "(missing)"}"; ECC permits only auth, find, status, and evals.`
     );
   }
 
@@ -186,11 +194,16 @@ function buildInvocation(executable, args) {
 
 function invokeIto(executable, args, environment = process.env) {
   const invocation = buildInvocation(executable, args);
+  const command = args[0] === "--json" ? args[1] : args[0];
+  const isNodeQualification = command === "evals";
   const result = spawnSync(invocation.executable, invocation.args, {
     cwd: process.cwd(),
     encoding: "utf8",
     env: {
-      ...createSafeItoEnvironment(environment, { includeItoRuntime: true }),
+      ...createSafeItoEnvironment(environment, {
+        includeItoRuntime: !isNodeQualification,
+        includeItoEvals: isNodeQualification,
+      }),
     },
     maxBuffer: MAX_OUTPUT_BYTES,
     shell: false,

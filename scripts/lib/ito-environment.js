@@ -29,6 +29,14 @@ const ITO_RUNTIME_ENVIRONMENT_KEYS = Object.freeze([
   "ITO_INVENTORY_URL",
 ]);
 
+const ITO_EVAL_ENVIRONMENT_KEYS = Object.freeze([
+  "ITO_ENABLE_SIXTYTWO_LIVE",
+  "SIXTYTWO_API_TOKEN",
+  "SIXTYTWO_TOKEN",
+  "SSH_AUTH_SOCK",
+  "SSH_AGENT_PID",
+]);
+
 const ECC_ITO_CONTROL_KEYS = Object.freeze([
   "ECC_DRY_RUN",
   "ECC_ITO_CLI_EXECUTABLE",
@@ -56,6 +64,12 @@ function createSafeItoEnvironment(source = process.env, options = {}) {
     }
   }
 
+  if (options.includeItoEvals) {
+    for (const key of ITO_EVAL_ENVIRONMENT_KEYS) {
+      copyDefined(source, safe, key);
+    }
+  }
+
   if (options.includeControls) {
     for (const key of ECC_ITO_CONTROL_KEYS) {
       copyDefined(source, safe, key);
@@ -67,6 +81,7 @@ function createSafeItoEnvironment(source = process.env, options = {}) {
 
 module.exports = Object.freeze({
   ECC_ITO_CONTROL_KEYS,
+  ITO_EVAL_ENVIRONMENT_KEYS,
   ITO_RUNTIME_ENVIRONMENT_KEYS,
   SYSTEM_ENVIRONMENT_KEYS,
   createSafeItoEnvironment,

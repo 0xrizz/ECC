@@ -80,8 +80,8 @@ function main() {
   console.log("\n=== Testing ECC × Itô real CLI bridge ===\n");
 
   const tests = [
-    ["forwards only auth, find, and status to an explicit local executable", () => {
-      for (const command of ["auth", "find", "status"]) {
+    ["forwards only the reviewed CLI surface to an explicit local executable", () => {
+      for (const command of ["auth", "find", "status", "evals"]) {
         const probe = makeItoProbe();
         try {
           const result = runCli(["ito", command], {
@@ -152,15 +152,62 @@ function main() {
         fs.rmSync(probe.directory, { recursive: true, force: true });
       }
     }],
-    ["rejects unsupported, browser, simulated, and node operations before spawning", () => {
-      for (const command of ["rent", "lock", "run", "inference", "evals", "mcp"]) {
+    ["isolates live node qualification from Itô and unrelated credentials", () => {
+      const probe = makeItoProbe();
+      try {
+        const configDirectory = path.join(probe.directory, "qualification");
+        const result = runCli([
+          "ito",
+          "evals",
+          "--cluster", "clu_prod_example",
+          "--live-sixtytwo",
+          "--nodes", "gpu-01,gpu-02",
+          "--config-dir", configDirectory,
+        ], {
+          ECC_ITO_CLI_EXECUTABLE: probe.executable,
+          ITO_API_KEY: "must-not-cross-into-node-qualification",
+          ITO_API_URL: "https://compute.example.test",
+          ITO_INVENTORY_URL: "https://edge.example.test",
+          ITO_ENABLE_SIXTYTWO_LIVE: "1",
+          SIXTYTWO_API_TOKEN: "sixtytwo-test-token",
+          SSH_AUTH_SOCK: "/tmp/ecc-test-agent.sock",
+          ITO_CLI_DEMO: "1",
+          ITO_CLI_STATE_DIR: "/tmp/forbidden-paper-state",
+          AWS_SECRET_ACCESS_KEY: "must-not-cross",
+          OPENAI_API_KEY: "must-not-cross",
+        });
+        assert.strictEqual(result.status, 0, result.stderr);
+        const invocation = readInvocation(probe);
+        assert.deepStrictEqual(invocation.argv, [
+          "evals",
+          "--cluster", "clu_prod_example",
+          "--live-sixtytwo",
+          "--nodes", "gpu-01,gpu-02",
+          "--config-dir", configDirectory,
+        ]);
+        assert.strictEqual(invocation.env.ITO_ENABLE_SIXTYTWO_LIVE, "1");
+        assert.strictEqual(invocation.env.SIXTYTWO_API_TOKEN, "sixtytwo-test-token");
+        assert.strictEqual(invocation.env.SSH_AUTH_SOCK, "/tmp/ecc-test-agent.sock");
+        assert.strictEqual(invocation.env.ITO_API_KEY, undefined);
+        assert.strictEqual(invocation.env.ITO_API_URL, undefined);
+        assert.strictEqual(invocation.env.ITO_INVENTORY_URL, undefined);
+        assert.strictEqual(invocation.env.ITO_CLI_DEMO, undefined);
+        assert.strictEqual(invocation.env.ITO_CLI_STATE_DIR, undefined);
+        assert.strictEqual(invocation.env.AWS_SECRET_ACCESS_KEY, undefined);
+        assert.strictEqual(invocation.env.OPENAI_API_KEY, undefined);
+      } finally {
+        fs.rmSync(probe.directory, { recursive: true, force: true });
+      }
+    }],
+    ["rejects unsupported browser, paper, and execution operations before spawning", () => {
+      for (const command of ["rent", "lock", "run", "inference", "mcp"]) {
         const probe = makeItoProbe();
         try {
           const result = runCli(["ito", command], {
             ECC_ITO_CLI_EXECUTABLE: probe.executable,
           });
           assert.notStrictEqual(result.status, 0, command);
-          assert.match(result.stderr, /only auth, find, and status/i);
+          assert.match(result.stderr, /only auth, find, status, and evals/i);
           assert.ok(!fs.existsSync(probe.log), `${command} must not spawn the Itô CLI`);
         } finally {
           fs.rmSync(probe.directory, { recursive: true, force: true });
@@ -335,6 +382,8 @@ function main() {
         assert.match(result.stdout, /ecc ito auth/);
         assert.match(result.stdout, /ecc ito find/);
         assert.match(result.stdout, /ecc ito status/);
+        assert.match(result.stdout, /ecc ito evals/);
+        assert.match(result.stdout, /sixtytwo/i);
         assert.match(result.stdout, /ito_auth/);
         assert.match(result.stdout, /ito_find/);
         assert.match(result.stdout, /ito_status/);
