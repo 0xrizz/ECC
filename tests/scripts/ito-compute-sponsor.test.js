@@ -99,12 +99,23 @@ function main() {
         /custom API endpoint or model gateway[\s\S]*Run or self-host any open-source model behind that gateway[\s\S]*sponsorship link is passive/
       );
       const sponsorMark = read('assets/images/sponsors/ito.svg');
-      assert.match(sponsorMark, /<path\b/);
-      assert.match(sponsorMark, /(?:fill="#00112b"|fill:#00112b)/i);
+      const sponsorMarkDark = read('assets/images/sponsors/ito-dark.svg');
+      assert.match(sponsorMark, /viewBox="0 0 280 40"/);
+      assert.match(sponsorMark, />It</);
+      assert.match(sponsorMark, />ô</);
+      assert.match(sponsorMark, />MARKETS</);
+      assert.match(sponsorMarkDark, /viewBox="0 0 280 40"/);
+      assert.match(sponsorMarkDark, /fill="#F8FAFC"/i);
       assert.doesNotMatch(
-        sponsorMark,
-        /@import|<script|<foreignObject|\son[a-z]+=|(?:href|xlink:href)=/i
+        `${sponsorMark}\n${sponsorMarkDark}`,
+        /<script|<foreignObject|\son[a-z]+=|(?:href|xlink:href)=/i
       );
+      const sponsorAssetUrls = `${sponsorMark}\n${sponsorMarkDark}`.match(URL_TOKEN_PATTERN) || [];
+      assert.ok(sponsorAssetUrls.length >= 4);
+      assert.ok(sponsorAssetUrls.every((url) => (
+        url.startsWith('http://www.w3.org/2000/svg')
+        || url.startsWith('https://fonts.googleapis.com/css2?')
+      )));
     }],
     ['sponsor roster keeps Itô and Moonshot distinct from node tooling', () => {
       const sponsors = read('SPONSORS.md');
