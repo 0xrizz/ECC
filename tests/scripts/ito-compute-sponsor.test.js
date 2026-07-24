@@ -100,7 +100,7 @@ function main() {
       );
       const sponsorMark = read('assets/images/sponsors/ito.svg');
       assert.match(sponsorMark, /<path\b/);
-      assert.match(sponsorMark, /fill="#0F172A"/);
+      assert.match(sponsorMark, /(?:fill="#00112b"|fill:#00112b)/i);
       assert.doesNotMatch(
         sponsorMark,
         /@import|<script|<foreignObject|\son[a-z]+=|(?:href|xlink:href)=/i
@@ -110,8 +110,8 @@ function main() {
       const sponsors = read('SPONSORS.md');
       assert.ok(sponsors.includes('[**Itô**]'));
       assert.ok(sponsors.includes('assets/images/sponsors/ito.svg'));
-      assert.ok(sponsors.includes('[**Moonshot AI**]'));
-      assert.ok(sponsors.includes('assets/images/sponsors/moonshot.svg'));
+      assert.ok(sponsors.includes('[**Moonshot AI (Kimi)**]'));
+      assert.ok(sponsors.includes('assets/images/sponsors/moonshot.png'));
       assert.doesNotMatch(sponsors, /sixtytwo|sixty.?two/i);
       assertExactComputeRoute(sponsors);
     }],

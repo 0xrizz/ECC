@@ -127,18 +127,12 @@ ECC v2.0.0 adds the public Hermes operator story on top of that reusable layer: 
     <strong>Itô</strong>
   </a>
 </td>
-<td align="center" width="220">
-  <a href="https://www.moonshot.ai/">
-    <img src="assets/images/sponsors/moonshot.svg" width="96" alt="Moonshot AI Kimi logo" /><br />
-    <strong>Moonshot AI</strong>
-  </a>
-</td>
 </tr>
 </table>
 
-<sub><strong>Run or self-host any open-source model.</strong> Itô partners with ECC on compute: <a href="https://compute.itomarkets.com">open the Itô dashboard to sign in and rent or manage GPUs</a>. Any GPU provider works. ECC only provides this link; it does not provision compute or serving. Managed inference through Itô is not live yet.</sub>
+<sub><strong>Run or self-host any open-source model.</strong> Itô is ECC's preferred compute sponsor and partner: <a href="https://compute.itomarkets.com">open the Itô dashboard to sign in and rent or manage GPUs</a>. Any GPU provider works. The sponsorship link is passive: it does not invoke an RFQ, reserve capacity, provision compute, or configure serving. Separately, the opt-in <code>ecc ito find</code> bridge invokes the explicitly configured canonical Itô CLI and submits a live authenticated RFQ; it does not reserve capacity. Managed inference through Itô is not live yet.</sub>
 
-<sub><strong>Moonshot AI (Kimi)</strong> are open source friends of ECC.</sub>
+<sub><strong>Moonshot AI (Kimi)</strong> sponsors ECC's open-source work and Kimi integration.</sub>
 
 <sub><strong>Community sponsors:</strong> <a href="https://github.com/mikejmorgan-ai">Mike Morgan</a> · <a href="https://github.com/jasonwu513">@jasonwu513</a> · <a href="https://github.com/1anter">@1anter</a> · <a href="https://github.com/massimotodaro">@massimotodaro</a> · <a href="https://github.com/meadmccabe">@meadmccabe</a></sub>
 
@@ -1890,7 +1884,7 @@ ECC takes supply-chain and agent safety seriously.
 
 ## Sponsors
 
-Partner: [Itô Markets](https://itomarkets.com) (compute). Open source friends: [Moonshot AI (Kimi)](https://www.moonshot.ai). Business sponsors: [CodeRabbit](https://www.coderabbit.ai) · [Greptile](https://www.greptile.com/go/ecc) · [Atlas Cloud](https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=ECC). Logos at the top of this README, full list and tiers in [SPONSORS.md](SPONSORS.md). [Become a sponsor](https://github.com/sponsors/affaan-m).
+Compute sponsor and partner: [Itô Markets](https://itomarkets.com). Open-source sponsor: [Moonshot AI (Kimi)](https://www.moonshot.ai). Business sponsors: [CodeRabbit](https://www.coderabbit.ai) · [Greptile](https://www.greptile.com/go/ecc) · [Atlas Cloud](https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=ECC). Logos at the top of this README, full list and tiers in [SPONSORS.md](SPONSORS.md). [Become a sponsor](https://github.com/sponsors/affaan-m).
 
 For GPU capacity, [Itô's compute dashboard](https://compute.itomarkets.com) rents fixed-rate GPU blocks. Any provider works: ECC links to the dashboard and does not provision compute or serving.
 
