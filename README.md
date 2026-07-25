@@ -87,11 +87,11 @@ ECC v2.0.0 adds the public Hermes operator story on top of that reusable layer: 
 <sub><strong>Partners &amp; sponsors</strong></sub>
 
 <p align="center" aria-label="Partners and sponsors">
-  <a href="https://www.coderabbit.ai" title="CodeRabbit"><img src="assets/images/sponsors/coderabbit.png" height="54" alt="CodeRabbit" /></a>&nbsp;&nbsp;&nbsp;
-  <a href="https://www.greptile.com/go/ecc" title="Greptile"><img src="assets/images/sponsors/greptile.png" height="54" alt="Greptile" /></a>&nbsp;&nbsp;&nbsp;
-  <a href="https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=ECC" title="Atlas Cloud"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/images/sponsors/atlascloud-dark.svg" /><img src="assets/images/sponsors/atlascloud.svg" width="154" alt="Atlas Cloud" /></picture></a>&nbsp;&nbsp;&nbsp;
-  <a href="https://www.moonshot.ai" title="Moonshot AI — Kimi"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/images/sponsors/moonshot-dark.png" /><img src="assets/images/sponsors/moonshot.png" width="132" alt="Moonshot AI — Kimi" /></picture></a>&nbsp;&nbsp;&nbsp;
-  <a href="https://compute.itomarkets.com" title="Itô Markets"><picture><source media="(prefers-color-scheme: light)" srcset="assets/images/sponsors/ito-transparent-light.png" /><img src="assets/images/sponsors/ito-transparent.png" width="96" alt="Itô Markets" /></picture></a>
+  <a href="https://www.coderabbit.ai" title="CodeRabbit"><img src="assets/images/sponsors/coderabbit.png" height="60" alt="CodeRabbit" /></a>&nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://www.greptile.com/go/ecc" title="Greptile"><img src="assets/images/sponsors/greptile.png" height="60" alt="Greptile" /></a>&nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=ECC" title="Atlas Cloud"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/images/sponsors/atlascloud-mark-dark.svg" /><img src="assets/images/sponsors/atlascloud-mark.svg" height="60" alt="Atlas Cloud" /></picture></a>&nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://platform.kimi.ai?aff=ecc" title="Moonshot AI — Kimi"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/images/sponsors/moonshot-mark-dark.svg" /><img src="assets/images/sponsors/moonshot-mark.svg" height="60" alt="Moonshot AI — Kimi" /></picture></a>&nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://compute.itomarkets.com" title="Itô Markets"><img src="assets/images/sponsors/ito-mark.png" height="60" alt="Itô Markets" /></a>
 </p>
 
 <sub><strong>Community sponsors:</strong> <a href="https://github.com/mikejmorgan-ai">Mike Morgan</a> · <a href="https://github.com/jasonwu513">@jasonwu513</a> · <a href="https://github.com/1anter">@1anter</a> · <a href="https://github.com/massimotodaro">@massimotodaro</a> · <a href="https://github.com/meadmccabe">@meadmccabe</a></sub>
@@ -110,21 +110,21 @@ This repo is the raw code only. The guides explain everything.
 <tr>
 <td width="33%" align="center">
 <a href="./the-shortform-guide.md">
-<img src="./assets/images/guides/shorthand-guide.png" width="213" height="120" alt="The Shorthand Guide to ECC" /><br />
+<img src="./assets/images/guides/shorthand-guide.png" width="300" alt="The Shorthand Guide to ECC" /><br />
 <b>The Shorthand Guide</b>
 </a>
 <br /><sub>Setup, foundations, philosophy. <b>Read this first.</b> (<a href="https://x.com/affaan/status/2012378465664745795">thread</a>)</sub>
 </td>
 <td width="33%" align="center">
 <a href="./the-longform-guide.md">
-<img src="./assets/images/guides/longform-guide.png" width="213" height="120" alt="The Longform Guide to ECC" /><br />
+<img src="./assets/images/guides/longform-guide.png" width="300" alt="The Longform Guide to ECC" /><br />
 <b>The Longform Guide</b>
 </a>
 <br /><sub>Token optimization, memory persistence, evals, parallelization. (<a href="https://x.com/affaan/status/2014040193557471352">thread</a>)</sub>
 </td>
 <td width="33%" align="center">
 <a href="./the-security-guide.md">
-<img src="./assets/images/guides/security-guide.png" width="213" height="120" alt="The Shorthand Guide to Everything Agentic Security" /><br />
+<img src="./assets/images/guides/security-guide.png" width="300" alt="The Shorthand Guide to Everything Agentic Security" /><br />
 <b>The Security Guide</b>
 </a>
 <br /><sub>Attack vectors, sandboxing, sanitization, CVEs, AgentShield. (<a href="https://x.com/affaan/status/2033263813387223421">thread</a>)</sub>
@@ -151,21 +151,21 @@ The Kimi Code harness and the model-serving layer are separate. ECC configures t
 <tr>
 <td width="33%" align="center">
   <a href="https://compute.itomarkets.com">
-    <picture><source media="(prefers-color-scheme: light)" srcset="assets/images/sponsors/ito-transparent-light.png" /><img src="assets/images/sponsors/ito-transparent.png" width="92" alt="Itô Markets" /></picture><br />
+    <img src="assets/images/sponsors/ito-mark.png" height="64" alt="Itô Markets" /><br />
     <strong>1. Get GPU capacity</strong>
   </a><br />
   <sub>Use Itô or any GPU provider.</sub>
 </td>
 <td width="33%" align="center">
-  <a href="https://www.moonshot.ai">
-    <picture><source media="(prefers-color-scheme: dark)" srcset="assets/images/sponsors/moonshot-dark.png" /><img src="assets/images/sponsors/moonshot.png" width="126" alt="Moonshot AI — Kimi" /></picture><br />
+  <a href="https://platform.kimi.ai?aff=ecc">
+    <picture><source media="(prefers-color-scheme: dark)" srcset="assets/images/sponsors/moonshot-mark-dark.svg" /><img src="assets/images/sponsors/moonshot-mark.svg" height="64" alt="Moonshot AI — Kimi" /></picture><br />
     <strong>2. Serve Kimi</strong>
   </a><br />
   <sub>Expose the chosen checkpoint through a Kimi- or OpenAI-compatible endpoint.</sub>
 </td>
 <td width="33%" align="center">
   <a href=".kimi/README.md">
-    <img src="assets/images/community/ecc-tools-mark.svg" height="52" alt="ECC Tools" /><br />
+    <img src="assets/images/community/ecc-tools-mark.svg" height="64" alt="ECC Tools" /><br />
     <strong>3. Run Kimi Code with ECC</strong>
   </a><br />
   <sub>Install project instructions and skills, then start <code>kimi</code>.</sub>
@@ -183,7 +183,7 @@ kimi
 
 Kimi Code discovers the installed `.kimi/AGENTS.md` instructions and `.kimi/skills/` workflows natively. The installer dry-run and regression suite verify that the Kimi target stays inside the project-local `.kimi/` root.
 
-Run or self-host any open-source model on owned or rented GPUs. Itô is ECC's preferred compute sponsor; any GPU provider works. The sponsorship link is passive: it does not invoke an RFQ, reserve capacity, provision compute, or configure serving. Separately, `ecc ito find` invokes the explicitly configured canonical Itô CLI and submits a live authenticated RFQ; it does not reserve capacity. Managed inference through Itô is not live yet.
+Run or self-host any open-source model on owned or rented GPUs. Itô partners with ECC on compute; any GPU provider works. The sponsorship link is passive: it does not invoke an RFQ, reserve capacity, provision compute, or configure serving. Separately, `ecc ito find` invokes the explicitly configured canonical Itô CLI and submits a live authenticated RFQ; it does not reserve capacity. Managed inference through Itô is not live yet.
 
 <sub>This three-beat strip is also the video outline: capacity → serving endpoint → Kimi Code with ECC.</sub>
 
@@ -1218,7 +1218,7 @@ claude
 
 If your gateway remaps model names, configure that in Claude Code rather than in ECC. ECC's hooks, skills, commands, and rules are model-provider agnostic once the `claude` CLI is already working.
 
-Run or self-host any open-source model behind that gateway using separate compute and serving setup. If you need GPU capacity, [Itô](https://compute.itomarkets.com) is ECC's preferred compute sponsor; any GPU provider works. That sponsorship link is passive: it does not invoke an RFQ, reserve capacity, provision compute, or configure serving. Separately, the opt-in `ecc ito find` bridge invokes the explicitly configured canonical Itô CLI and submits a live authenticated RFQ; it does not reserve capacity. Managed inference through Itô is not live yet.
+Run or self-host any open-source model behind that gateway using separate compute and serving setup. If you need GPU capacity, [Itô](https://compute.itomarkets.com) partners with ECC on compute; any GPU provider works. That sponsorship link is passive: it does not invoke an RFQ, reserve capacity, provision compute, or configure serving. Separately, the opt-in `ecc ito find` bridge invokes the explicitly configured canonical Itô CLI and submits a live authenticated RFQ; it does not reserve capacity. Managed inference through Itô is not live yet.
 
 ### Itô compute CLI bridge
 
@@ -1894,7 +1894,7 @@ ECC takes supply-chain and agent safety seriously.
 
 ## Sponsors
 
-Business sponsors: [CodeRabbit](https://www.coderabbit.ai) · [Greptile](https://www.greptile.com/go/ecc) · [Atlas Cloud](https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=ECC) · [Moonshot AI (Kimi)](https://www.moonshot.ai) · [Itô Markets](https://itomarkets.com). Logos are at the top of this README; the full roster and tiers are in [SPONSORS.md](SPONSORS.md). [Become a sponsor](https://github.com/sponsors/affaan-m).
+Partner: [Itô Markets](https://itomarkets.com) (compute). Open source friends: [Moonshot AI (Kimi)](https://platform.kimi.ai?aff=ecc). Business sponsors: [CodeRabbit](https://www.coderabbit.ai) · [Greptile](https://www.greptile.com/go/ecc) · [Atlas Cloud](https://www.atlascloud.ai/?utm_source=github&utm_medium=link&utm_campaign=ECC). Logos are at the top of this README; the full roster and tiers are in [SPONSORS.md](SPONSORS.md). [Become a sponsor](https://github.com/sponsors/affaan-m).
 
 ---
 
