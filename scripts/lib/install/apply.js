@@ -183,8 +183,9 @@ function applyInstallPlan(plan, dependencies = {}) {
   for (const operation of appliedPlan.operations) {
     assertSafeClaudeSkillOperation(appliedPlan, operation);
     fs.mkdirSync(path.dirname(operation.destinationPath), { recursive: true });
-    // The first check validates the existing chain; this second check validates
-    // every directory created by mkdirSync before any file is written.
+    // Recheck directories that were absent during the first validation. This
+    // narrows the symlink-swap window around mkdirSync, but path checks cannot
+    // eliminate a later TOCTOU race before the file write.
     assertSafeClaudeSkillOperation(appliedPlan, operation);
 
     if (operation.kind === 'merge-json') {

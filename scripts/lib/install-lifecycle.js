@@ -961,7 +961,7 @@ function prepareRepairMigration(plan) {
     migration,
     plan: {
       ...plan,
-      operations: migration.appliedOperations,
+      operations: migration.finalState.operations,
       statePreview: migration.finalState,
       warnings: [
         ...(Array.isArray(plan.warnings) ? plan.warnings : []),

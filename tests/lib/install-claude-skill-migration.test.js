@@ -734,6 +734,46 @@ function runTests() {
     }
   })) passed++; else failed++;
 
+  if (test('rechecks skill directories created between validation and copy', () => {
+    if (process.platform === 'win32') {
+      console.log('    ↷ skipped on Windows: symlink privileges vary');
+      return;
+    }
+
+    const fixture = createFixture({
+      skillFiles: {
+        'SKILL.md': '# Current ECC skill\n',
+      },
+    });
+    const destinationDirectory = path.dirname(fixture.operations[0].destinationPath);
+    const outsideRoot = path.join(fixture.tempDir, 'outside');
+    const originalMkdirSync = fs.mkdirSync;
+
+    try {
+      originalMkdirSync(outsideRoot, { recursive: true });
+      let injectedSymlink = false;
+      fs.mkdirSync = function mkdirAndReplaceWithSymlink(directoryPath, options) {
+        const result = originalMkdirSync(directoryPath, options);
+        if (!injectedSymlink && path.resolve(directoryPath) === path.resolve(destinationDirectory)) {
+          fs.rmSync(destinationDirectory, { recursive: true, force: true });
+          fs.symlinkSync(outsideRoot, destinationDirectory, 'dir');
+          injectedSymlink = true;
+        }
+        return result;
+      };
+
+      assert.throws(
+        () => applyInstallPlan(fixture.plan, { writeInstallState() {} }),
+        /symlinked Claude skill path/
+      );
+      assert.strictEqual(injectedSymlink, true);
+      assert.deepStrictEqual(fs.readdirSync(outsideRoot), []);
+    } finally {
+      fs.mkdirSync = originalMkdirSync;
+      cleanup(fixture.tempDir);
+    }
+  })) passed++; else failed++;
+
   if (test('rejects a dangling destination symlink before copying a Claude skill file', () => {
     if (process.platform === 'win32') {
       console.log('    ↷ skipped on Windows: symlink privileges vary');

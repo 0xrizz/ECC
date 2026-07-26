@@ -708,12 +708,15 @@ function runTests() {
         projectRoot,
         targets: ['claude'],
       });
-      assert.notStrictEqual(repaired.results[0].status, 'error');
+      assert.strictEqual(repaired.results[0].status, 'repaired');
       assert.ok(repaired.results[0].warnings.some(warning => warning.includes('user-owned')));
       assert.strictEqual(fs.readFileSync(flatSkillPath, 'utf8'), '# User-owned flat skill\n');
       assert.strictEqual(
         fs.readFileSync(legacySkillPath, 'utf8'),
-        '# Previously managed nested skill\n'
+        fs.readFileSync(
+          path.join(REPO_ROOT, 'skills', 'tdd-workflow', 'SKILL.md'),
+          'utf8'
+        )
       );
       const repairedState = JSON.parse(fs.readFileSync(installStatePath, 'utf8'));
       assert.ok(repairedState.operations.some(operation => (

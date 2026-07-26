@@ -236,84 +236,94 @@ function createFileConflictWarning(destinationPath, retainsLegacy) {
   return `Skipped user-owned Claude skill file ${destinationPath}: the existing file is not recorded in ECC install-state.${legacySuffix}`;
 }
 
-function prepareClaudeSkillMigration(plan) {
-  const target = plan && plan.adapter && plan.adapter.target;
-  if (!CLAUDE_TARGETS.has(target)) {
-    return {
-      enabled: false,
-      appliedOperations: [...plan.operations],
-      skippedOperations: [],
-      warnings: [],
-      bridgeState: plan.statePreview,
-      finalState: plan.statePreview,
-      legacyOperationsToRemove: [],
-      requiresBridgeState: false,
-    };
-  }
+function createDisabledMigration(plan) {
+  return {
+    enabled: false,
+    appliedOperations: [...plan.operations],
+    skippedOperations: [],
+    warnings: [],
+    bridgeState: plan.statePreview,
+    finalState: plan.statePreview,
+    legacyOperationsToRemove: [],
+    requiresBridgeState: false,
+  };
+}
 
-  const previousState = pathExists(plan.installStatePath)
-    ? readInstallState(plan.installStatePath)
-    : null;
-  const currentGroups = groupCurrentSkillOperations(plan);
-  const previous = classifyPreviousOperations(plan, previousState);
-  const skippedOperations = [];
-  const skippedDestinations = new Set();
-  const warnings = [];
+function collectRetainedLegacyOperations(currentGroups, previous) {
   const currentSourceKeys = new Set(
     [...currentGroups.values()]
       .flat()
       .map(({ descriptor }) => descriptor.sourceKey)
   );
-  const retainedLegacyOperations = new Set(
+  return (
     [...previous.legacyBySource.entries()]
       .filter(([sourceKey]) => !currentSourceKeys.has(sourceKey))
       .map(([_sourceKey, operation]) => operation)
   );
+}
 
-  for (const [flatSkillRoot, entries] of currentGroups) {
-    const hasManagedFlatFile = entries.some(({ operation }) => (
-      previous.flatByDestination.has(comparablePath(operation.destinationPath))
-    ));
-    const legacyEntries = previous.legacyBySkillRoot.get(
-      entries[0].descriptor.legacySkillRoot
-    ) || [];
+function classifySkillGroup(flatSkillRoot, entries, previous) {
+  const hasManagedFlatFile = entries.some(({ operation }) => (
+    previous.flatByDestination.has(comparablePath(operation.destinationPath))
+  ));
+  const legacyEntries = previous.legacyBySkillRoot.get(
+    entries[0].descriptor.legacySkillRoot
+  ) || [];
 
-    if (pathExists(flatSkillRoot) && !hasManagedFlatFile) {
-      for (const { operation } of entries) {
-        skippedOperations.push(operation);
-        skippedDestinations.add(comparablePath(operation.destinationPath));
-      }
-      for (const { operation } of legacyEntries) {
-        retainedLegacyOperations.add(operation);
-      }
-      warnings.push(createConflictWarning(
+  if (pathExists(flatSkillRoot) && !hasManagedFlatFile) {
+    return {
+      skippedOperations: entries.map(({ operation }) => operation),
+      warnings: [createConflictWarning(
         entries[0].descriptor.skillName,
         flatSkillRoot,
         legacyEntries.length > 0
-      ));
-      continue;
-    }
-
-    for (const { operation, descriptor } of entries) {
-      const destinationKey = comparablePath(operation.destinationPath);
-      const isPreviouslyManaged = previous.flatByDestination.has(destinationKey);
-      if (!pathExists(operation.destinationPath) || isPreviouslyManaged) {
-        continue;
-      }
-
-      skippedOperations.push(operation);
-      skippedDestinations.add(destinationKey);
-      const legacyOperation = previous.legacyBySource.get(descriptor.sourceKey);
-      if (legacyOperation) {
-        retainedLegacyOperations.add(legacyOperation);
-      }
-      warnings.push(createFileConflictWarning(
-        operation.destinationPath,
-        Boolean(legacyOperation)
-      ));
-    }
+      )],
+      retainedLegacyOperations: legacyEntries.map(({ operation }) => operation),
+    };
   }
 
+  const conflicts = entries.filter(({ operation }) => (
+    pathExists(operation.destinationPath)
+    && !previous.flatByDestination.has(comparablePath(operation.destinationPath))
+  ));
+  return {
+    skippedOperations: conflicts.map(({ operation }) => operation),
+    warnings: conflicts.map(({ operation, descriptor }) => createFileConflictWarning(
+      operation.destinationPath,
+      previous.legacyBySource.has(descriptor.sourceKey)
+    )),
+    retainedLegacyOperations: conflicts
+      .map(({ descriptor }) => previous.legacyBySource.get(descriptor.sourceKey))
+      .filter(Boolean),
+  };
+}
+
+function classifySkillConflicts(currentGroups, previous) {
+  const groupClassifications = [...currentGroups.entries()]
+    .map(([flatSkillRoot, entries]) => classifySkillGroup(
+      flatSkillRoot,
+      entries,
+      previous
+    ));
+  const skippedOperations = groupClassifications
+    .flatMap(classification => classification.skippedOperations);
+  return {
+    skippedOperations,
+    skippedDestinations: new Set(
+      skippedOperations.map(operation => comparablePath(operation.destinationPath))
+    ),
+    warnings: groupClassifications.flatMap(classification => classification.warnings),
+    retainedLegacyOperations: new Set([
+      ...collectRetainedLegacyOperations(currentGroups, previous),
+      ...groupClassifications.flatMap(
+        classification => classification.retainedLegacyOperations
+      ),
+    ]),
+  };
+}
+
+function buildMigrationStates(plan, previousState, previous, classification) {
+  const { skippedDestinations, retainedLegacyOperations } = classification;
   const appliedOperations = plan.operations.filter(operation => (
     !skippedDestinations.has(comparablePath(operation.destinationPath))
   ));
@@ -333,14 +343,42 @@ function prepareClaudeSkillMigration(plan) {
   ];
 
   return {
-    enabled: true,
     appliedOperations,
-    skippedOperations,
-    warnings,
     bridgeState: buildState(plan.statePreview, bridgeOperations),
     finalState: buildState(plan.statePreview, finalOperations),
     legacyOperationsToRemove,
     requiresBridgeState: appliedOperations.length > 0,
+  };
+}
+
+function prepareClaudeSkillMigration(plan) {
+  const target = plan && plan.adapter && plan.adapter.target;
+  if (!CLAUDE_TARGETS.has(target)) {
+    return createDisabledMigration(plan);
+  }
+
+  const previousState = pathExists(plan.installStatePath)
+    ? readInstallState(plan.installStatePath)
+    : null;
+  const currentGroups = groupCurrentSkillOperations(plan);
+  const previous = classifyPreviousOperations(plan, previousState);
+  const classification = classifySkillConflicts(currentGroups, previous);
+  const states = buildMigrationStates(
+    plan,
+    previousState,
+    previous,
+    classification
+  );
+
+  return {
+    enabled: true,
+    appliedOperations: states.appliedOperations,
+    skippedOperations: classification.skippedOperations,
+    warnings: classification.warnings,
+    bridgeState: states.bridgeState,
+    finalState: states.finalState,
+    legacyOperationsToRemove: states.legacyOperationsToRemove,
+    requiresBridgeState: states.requiresBridgeState,
   };
 }
 

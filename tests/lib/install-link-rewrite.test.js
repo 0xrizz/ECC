@@ -10,7 +10,6 @@ const path = require('path');
 
 const {
   buildInstallIndex,
-  isNamespacedSource,
   rewriteRelativeLinks,
 } = require('../../scripts/lib/install/link-rewrite');
 const { createManifestInstallPlan } = require('../../scripts/lib/install-executor');
@@ -146,28 +145,6 @@ function runTests() {
     const before = '[r](../../rules/react/hooks.md)';
     const after = rewriteRelativeLinks(before, { sourceRel: 'skills/not-installed/SKILL.md', index });
     assert.strictEqual(after, before);
-  })) passed++; else failed++;
-
-  // Guards the low-level namespace detector for callers that need to distinguish
-  // identity copies from prefix-injected placements.
-  if (test('isNamespacedSource flags only files whose own install path changed', () => {
-    assert.strictEqual(
-      isNamespacedSource('rules/react/hooks.md', index), true,
-      'a namespaced rule file must be flagged'
-    );
-    assert.strictEqual(
-      isNamespacedSource('skills/react-patterns/SKILL.md', index), false,
-      'a flat-installed skill file must not be flagged'
-    );
-    const identity = buildInstallIndex(identityMappings());
-    assert.strictEqual(
-      isNamespacedSource('skills/react-patterns/SKILL.md', identity), false,
-      'an identity-mapped file must stay on the byte-copy path'
-    );
-    assert.strictEqual(
-      isNamespacedSource('skills/not-in-plan/SKILL.md', index), false,
-      'a file the plan does not install is not namespaced'
-    );
   })) passed++; else failed++;
 
   // Integration: real repo content + real claude plan. Every rewritten link in
