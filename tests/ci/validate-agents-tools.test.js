@@ -62,7 +62,7 @@ function runSourceViaTempFile(source) {
       stderr: err.stderr || '',
     };
   } finally {
-    try { fs.unlinkSync(tmpFile); } catch (_) { /* ignore cleanup errors */ }
+    fs.rmSync(tmpFile, { force: true });
   }
 }
 
