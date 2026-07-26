@@ -7,6 +7,9 @@ const { resolveInstallPlan, loadInstallManifests } = require('./install-manifest
 const { readInstallState, validateInstallState } = require('./install-state');
 const { assertWithinTrustedRoot } = require('./path-safety');
 const { createManifestInstallPlan } = require('./install-executor');
+const {
+  prepareClaudeSkillMigration,
+} = require('./install/claude-skill-migration');
 const { getInstallTargetAdapter, listInstallTargetAdapters } = require('./install-targets/registry');
 const OPENCODE_BUILD_ARTIFACT = path.join('.opencode', 'dist');
 const OPENCODE_BUILD_SCRIPT = path.join('scripts', 'build-opencode.js');
@@ -1383,6 +1386,30 @@ function writeRefreshedInstallState(record, statePreview) {
   );
 }
 
+function prepareRepairMigration(plan, record) {
+  const trustedPlan = {
+    ...plan,
+    adapter: record.adapter,
+    targetRoot: record.targetRoot,
+    installRoot: record.targetRoot,
+    installStatePath: record.installStatePath,
+    statePreview: buildAdapterDerivedStatePreview(plan.statePreview, record),
+  };
+  const migration = prepareClaudeSkillMigration(trustedPlan);
+  return {
+    migration,
+    plan: {
+      ...trustedPlan,
+      operations: migration.finalState.operations,
+      statePreview: migration.finalState,
+      warnings: [
+        ...(Array.isArray(plan.warnings) ? plan.warnings : []),
+        ...migration.warnings,
+      ],
+    },
+  };
+}
+
 function repairInstalledStates(options = {}) {
   const repoRoot = options.repoRoot || DEFAULT_REPO_ROOT;
   const manifests = loadInstallManifests({ repoRoot });
@@ -1420,9 +1447,10 @@ function repairInstalledStates(options = {}) {
       const opencodeBuildRepairPath = path.join(context.repoRoot, OPENCODE_BUILD_ARTIFACT);
 
       if (needsOpencodeBuild && options.dryRun) {
-        const desiredPlan = createRepairPlanFromRecord(record, context, {
+        const rawPlan = createRepairPlanFromRecord(record, context, {
           exemptValidationCodes: [OPENCODE_PLUGIN_NOT_BUILT_CODE],
         });
+        const { plan: desiredPlan } = prepareRepairMigration(rawPlan, record);
         const operationHealth = summarizeManagedOperationHealth(
           context.repoRoot,
           record.targetRoot,
@@ -1445,6 +1473,7 @@ function repairInstalledStates(options = {}) {
           repairedPaths: [],
           plannedRepairs,
           stateRefreshed: false,
+          warnings: desiredPlan.warnings,
           error: null
         };
       }
@@ -1464,7 +1493,11 @@ function repairInstalledStates(options = {}) {
         }
       }
 
-      const desiredPlan = createRepairPlanFromRecord(record, context);
+      const rawPlan = createRepairPlanFromRecord(record, context);
+      const {
+        migration,
+        plan: desiredPlan,
+      } = prepareRepairMigration(rawPlan, record);
       const operationHealth = summarizeManagedOperationHealth(
         context.repoRoot,
         record.targetRoot,
@@ -1486,14 +1519,20 @@ function repairInstalledStates(options = {}) {
           installStatePath: record.installStatePath,
           repairedPaths: [],
           plannedRepairs: [],
+          warnings: desiredPlan.warnings,
           error: `Missing source file(s): ${operationHealth.missingSource.map(entry => entry.sourcePath).join(', ')}`
         };
       }
 
       const repairOperations = [...operationHealth.missing.map(entry => ({ ...entry.operation })), ...operationHealth.drifted.map(entry => ({ ...entry.operation }))];
-      const plannedRepairs = needsOpencodeBuild
-        ? [opencodeBuildRepairPath, ...repairOperations.map(operation => operation.destinationPath)]
-        : repairOperations.map(operation => operation.destinationPath);
+      const legacyMigrationPaths = migration.legacyOperationsToRemove.map(
+        operation => operation.destinationPath
+      );
+      const plannedRepairs = [...new Set([
+        ...(needsOpencodeBuild ? [opencodeBuildRepairPath] : []),
+        ...repairOperations.map(operation => operation.destinationPath),
+        ...legacyMigrationPaths,
+      ])];
 
       if (options.dryRun) {
         return {
@@ -1503,11 +1542,17 @@ function repairInstalledStates(options = {}) {
           repairedPaths: [],
           plannedRepairs,
           stateRefreshed: plannedRepairs.length === 0,
+          warnings: desiredPlan.warnings,
           error: null
         };
       }
 
+      const hasLegacyMigration = migration.legacyOperationsToRemove.length > 0;
       const repairedPaths = needsOpencodeBuild ? [opencodeBuildRepairPath] : [];
+      if (migration.requiresBridgeState && (repairOperations.length > 0 || hasLegacyMigration)) {
+        writeRefreshedInstallState(record, migration.bridgeState);
+      }
+
       for (const operation of repairOperations) {
         const repairedPath = executeRepairOperation(
           context.repoRoot,
@@ -1518,15 +1563,31 @@ function repairInstalledStates(options = {}) {
           repairedPaths.push(repairedPath);
         }
       }
+      if (hasLegacyMigration) {
+        for (const operation of migration.legacyOperationsToRemove) {
+          const removedPath = removeContainedPath(
+            operation.destinationPath,
+            record.targetRoot,
+            'migrate managed Claude skill',
+            { force: true }
+          );
+          if (removedPath) {
+            repairedPaths.push(removedPath);
+          }
+        }
+      }
       writeRefreshedInstallState(record, desiredPlan.statePreview);
 
       return {
         adapter: record.adapter,
-        status: (repairOperations.length > 0 || needsOpencodeBuild) ? 'repaired' : 'ok',
+        status: (repairOperations.length > 0 || needsOpencodeBuild || hasLegacyMigration)
+          ? 'repaired'
+          : 'ok',
         installStatePath: record.installStatePath,
         repairedPaths,
         plannedRepairs: [],
         stateRefreshed: true,
+        warnings: desiredPlan.warnings,
         error: null
       };
     } catch (error) {
