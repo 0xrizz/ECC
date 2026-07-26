@@ -61,17 +61,19 @@ function assertSafeSkillPath(targetPath, targetRoot, action) {
   let currentPath = resolvedRoot;
   for (const segment of relativePath.split(path.sep)) {
     currentPath = path.join(currentPath, segment);
+    let stats;
     try {
-      if (fs.lstatSync(currentPath).isSymbolicLink()) {
-        throw new Error(
-          `Refusing to ${action} through symlinked Claude skill path: '${currentPath}'.`
-        );
-      }
+      stats = fs.lstatSync(currentPath);
     } catch (error) {
       if (error && error.code === 'ENOENT') {
         break;
       }
       throw error;
+    }
+    if (stats.isSymbolicLink()) {
+      throw new Error(
+        `Refusing to ${action} through symlinked Claude skill path: '${currentPath}'.`
+      );
     }
   }
 
@@ -325,19 +327,9 @@ function prepareClaudeSkillMigration(plan) {
     )),
     ...retainedLegacyOperations,
   ];
-  const appliedSkillDestinations = new Set(
-    [...currentGroups.values()]
-      .flat()
-      .map(({ operation }) => operation)
-      .filter(operation => !skippedDestinations.has(comparablePath(operation.destinationPath)))
-      .map(operation => comparablePath(operation.destinationPath))
-  );
-  const plannedFlatSkillOperations = plan.statePreview.operations.filter(operation => (
-    appliedSkillDestinations.has(comparablePath(operation.destinationPath))
-  ));
   const bridgeOperations = [
     ...((previousState && previousState.operations) || []),
-    ...plannedFlatSkillOperations,
+    ...appliedOperations,
   ];
 
   return {
@@ -348,7 +340,7 @@ function prepareClaudeSkillMigration(plan) {
     bridgeState: buildState(plan.statePreview, bridgeOperations),
     finalState: buildState(plan.statePreview, finalOperations),
     legacyOperationsToRemove,
-    requiresBridgeState: plannedFlatSkillOperations.length > 0,
+    requiresBridgeState: appliedOperations.length > 0,
   };
 }
 

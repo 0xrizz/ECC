@@ -468,7 +468,7 @@ function runTests() {
       assert.strictEqual(fs.readFileSync(userRulePath, 'utf8'), '# User custom rule\n');
       assert.strictEqual(fs.readFileSync(userSkillPath, 'utf8'), '# User custom skill\n');
       assert.ok(fs.existsSync(path.join(claudeRoot, 'rules', 'ecc', 'common', 'coding-style.md')));
-      assert.ok(fs.existsSync(path.join(claudeRoot, 'skills', 'tdd-workflow', 'SKILL.md')));
+      assert.ok(fs.existsSync(path.join(claudeRoot, 'skills', 'verification-loop', 'SKILL.md')));
       const state = readJson(path.join(claudeRoot, 'ecc', 'install-state.json'));
       assert.ok(!state.operations.some(operation => (
         operation.destinationPath.startsWith(path.join(claudeRoot, 'skills', 'tdd-workflow'))
@@ -517,6 +517,46 @@ function runTests() {
       )));
       assert.ok(payload.result.warnings.some(warning => warning.includes('user-owned')));
       assert.strictEqual(fs.readFileSync(userSkillPath, 'utf8'), '# User custom skill\n');
+    } finally {
+      cleanup(homeDir);
+      cleanup(projectDir);
+    }
+  })) passed++; else failed++;
+
+  if (test('dry-run reports the same user-owned Claude skill conflicts as apply', () => {
+    const homeDir = createTempDir('install-apply-home-');
+    const projectDir = createTempDir('install-apply-project-');
+
+    try {
+      const userSkillRoot = path.join(
+        homeDir,
+        '.claude',
+        'skills',
+        'tdd-workflow'
+      );
+      const userSkillPath = path.join(userSkillRoot, 'SKILL.md');
+      fs.mkdirSync(userSkillRoot, { recursive: true });
+      fs.writeFileSync(userSkillPath, '# User custom skill\n');
+
+      const result = run(
+        ['--skills', 'tdd-workflow', '--dry-run', '--json'],
+        { cwd: projectDir, homeDir }
+      );
+      assert.strictEqual(result.code, 0, result.stderr);
+
+      const payload = JSON.parse(result.stdout);
+      assert.strictEqual(payload.dryRun, true);
+      assert.ok(payload.plan.plannedOperations.length > 0);
+      assert.ok(payload.plan.skippedOperations.length > 0);
+      assert.ok(payload.plan.warnings.some(warning => warning.includes('user-owned')));
+      assert.ok(payload.plan.skippedOperations.every(operation => (
+        operation.destinationPath.startsWith(userSkillRoot)
+      )));
+      assert.ok(!payload.plan.operations.some(operation => (
+        operation.destinationPath.startsWith(userSkillRoot)
+      )));
+      assert.strictEqual(fs.readFileSync(userSkillPath, 'utf8'), '# User custom skill\n');
+      assert.ok(!fs.existsSync(path.join(homeDir, '.claude', 'ecc', 'install-state.json')));
     } finally {
       cleanup(homeDir);
       cleanup(projectDir);

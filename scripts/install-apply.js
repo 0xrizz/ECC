@@ -103,7 +103,7 @@ function printHumanPlan(plan, dryRun) {
     }
   }
   console.log(`${dryRun ? 'Operations' : 'Applied operations'}: ${plan.operations.length}`);
-  if (!dryRun && Array.isArray(plan.skippedOperations) && plan.skippedOperations.length > 0) {
+  if (Array.isArray(plan.skippedOperations) && plan.skippedOperations.length > 0) {
     console.log(`Skipped operations: ${plan.skippedOperations.length}`);
   }
 
@@ -119,7 +119,7 @@ function printHumanPlan(plan, dryRun) {
     console.log(`- ${operation.sourceRelativePath} -> ${operation.destinationPath}`);
   }
 
-  if (!dryRun && Array.isArray(plan.skippedOperations) && plan.skippedOperations.length > 0) {
+  if (Array.isArray(plan.skippedOperations) && plan.skippedOperations.length > 0) {
     console.log('\nSkipped file operations:');
     for (const operation of plan.skippedOperations) {
       console.log(`- ${operation.sourceRelativePath} -> ${operation.destinationPath}`);
@@ -145,7 +145,10 @@ function main() {
       findDefaultInstallConfigPath,
       loadInstallConfig,
     } = require('./lib/install/config');
-    const { applyInstallPlan } = require('./lib/install-executor');
+    const {
+      applyInstallPlan,
+      previewInstallPlan,
+    } = require('./lib/install-executor');
     const { createInstallPlanFromRequest } = require('./lib/install/runtime');
     const defaultConfigPath = options.configPath || options.languages.length > 0
       ? null
@@ -157,13 +160,14 @@ function main() {
       ...options,
       config,
     });
-    const plan = createInstallPlanFromRequest(request, {
+    const rawPlan = createInstallPlanFromRequest(request, {
       projectRoot: process.cwd(),
       homeDir: process.env.HOME || os.homedir(),
       claudeRulesDir: process.env.CLAUDE_RULES_DIR || null,
     });
 
     if (options.dryRun) {
+      const plan = previewInstallPlan(rawPlan);
       if (options.json) {
         console.log(JSON.stringify({ dryRun: true, plan }, null, 2));
       } else {
@@ -172,7 +176,7 @@ function main() {
       return;
     }
 
-    const result = applyInstallPlan(plan);
+    const result = applyInstallPlan(rawPlan);
     if (options.json) {
       console.log(JSON.stringify({ dryRun: false, result }, null, 2));
     } else {

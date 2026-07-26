@@ -144,6 +144,22 @@ function buildResolvedClaudeHooks(plan) {
   };
 }
 
+function previewInstallPlan(plan) {
+  const migration = prepareClaudeSkillMigration(plan);
+  return {
+    ...plan,
+    statePreview: migration.finalState,
+    plannedOperations: [...plan.operations],
+    operations: migration.appliedOperations,
+    skippedOperations: migration.skippedOperations,
+    warnings: [
+      ...(Array.isArray(plan.warnings) ? plan.warnings : []),
+      ...migration.warnings,
+    ],
+    applied: false,
+  };
+}
+
 function applyInstallPlan(plan, dependencies = {}) {
   const persistInstallState = dependencies.writeInstallState || writeInstallState;
   const migration = prepareClaudeSkillMigration(plan);
@@ -157,15 +173,18 @@ function applyInstallPlan(plan, dependencies = {}) {
   const hasLegacyMigration = migration.legacyOperationsToRemove.length > 0;
 
   if (migration.requiresBridgeState) {
-    // Own planned flat skill files before the first copy. A later failure is
-    // retryable and uninstall can clean any partial flat writes. During legacy
-    // migration the bridge also retains every operation from the prior state.
+    // Own every operation that may be written during a flat-skill migration
+    // before the first copy. A later failure is retryable and uninstall can
+    // clean the entire partial install, including non-skill files. During
+    // legacy migration the bridge also retains the prior managed operations.
     persistInstallState(plan.installStatePath, migration.bridgeState);
   }
 
   for (const operation of appliedPlan.operations) {
     assertSafeClaudeSkillOperation(appliedPlan, operation);
     fs.mkdirSync(path.dirname(operation.destinationPath), { recursive: true });
+    // The first check validates the existing chain; this second check validates
+    // every directory created by mkdirSync before any file is written.
     assertSafeClaudeSkillOperation(appliedPlan, operation);
 
     if (operation.kind === 'merge-json') {
@@ -245,4 +264,5 @@ function applyInstallPlan(plan, dependencies = {}) {
 
 module.exports = {
   applyInstallPlan,
+  previewInstallPlan,
 };

@@ -510,6 +510,129 @@ function runTests() {
     }
   })) passed++; else failed++;
 
+  if (test('tracks non-skill files written before a partial flat-skill install fails', () => {
+    const fixture = createFixture();
+    try {
+      const ruleSourceRelativePath = path.join('rules', 'common', 'coding.md');
+      const ruleSourcePath = path.join(fixture.sourceRoot, ruleSourceRelativePath);
+      const ruleDestinationPath = path.join(
+        fixture.targetRoot,
+        'rules',
+        'ecc',
+        'common',
+        'coding.md'
+      );
+      fs.mkdirSync(path.dirname(ruleSourcePath), { recursive: true });
+      fs.writeFileSync(ruleSourcePath, '# Managed rule\n');
+
+      const ruleOperation = createOperation(
+        'workflow-quality',
+        fixture.sourceRoot,
+        ruleSourceRelativePath,
+        ruleDestinationPath
+      );
+      const missingOperation = createOperation(
+        'workflow-quality',
+        fixture.sourceRoot,
+        path.join('commands', 'missing.md'),
+        path.join(fixture.targetRoot, 'commands', 'missing.md')
+      );
+      const operations = [
+        fixture.operations[0],
+        ruleOperation,
+        missingOperation,
+      ];
+      const partialPlan = {
+        ...fixture.plan,
+        operations,
+        statePreview: {
+          ...fixture.plan.statePreview,
+          operations: operations.map(operation => ({ ...operation })),
+        },
+      };
+
+      assert.throws(() => applyInstallPlan(partialPlan), /ENOENT/);
+      assert.ok(fs.existsSync(ruleDestinationPath));
+
+      const bridgeState = readInstallState(fixture.installStatePath);
+      assert.ok(bridgeState.operations.some(operation => (
+        operation.destinationPath === ruleDestinationPath
+      )));
+
+      const uninstall = runUninstall(fixture);
+      assert.strictEqual(uninstall.summary.errorCount, 0);
+      assert.ok(!fs.existsSync(ruleDestinationPath));
+    } finally {
+      cleanup(fixture.tempDir);
+    }
+  })) passed++; else failed++;
+
+  if (test('tracks partial non-skill writes when every flat skill is user-owned', () => {
+    const fixture = createFixture();
+    try {
+      const userSkillPath = fixture.operations[0].destinationPath;
+      fs.mkdirSync(path.dirname(userSkillPath), { recursive: true });
+      fs.writeFileSync(userSkillPath, '# User skill\n');
+
+      const ruleSourceRelativePath = path.join('rules', 'common', 'coding.md');
+      const ruleSourcePath = path.join(fixture.sourceRoot, ruleSourceRelativePath);
+      const ruleDestinationPath = path.join(
+        fixture.targetRoot,
+        'rules',
+        'ecc',
+        'common',
+        'coding.md'
+      );
+      fs.mkdirSync(path.dirname(ruleSourcePath), { recursive: true });
+      fs.writeFileSync(ruleSourcePath, '# Managed rule\n');
+
+      const ruleOperation = createOperation(
+        'workflow-quality',
+        fixture.sourceRoot,
+        ruleSourceRelativePath,
+        ruleDestinationPath
+      );
+      const missingOperation = createOperation(
+        'workflow-quality',
+        fixture.sourceRoot,
+        path.join('commands', 'missing.md'),
+        path.join(fixture.targetRoot, 'commands', 'missing.md')
+      );
+      const operations = [
+        ...fixture.operations,
+        ruleOperation,
+        missingOperation,
+      ];
+      const partialPlan = {
+        ...fixture.plan,
+        operations,
+        statePreview: {
+          ...fixture.plan.statePreview,
+          operations: operations.map(operation => ({ ...operation })),
+        },
+      };
+
+      assert.throws(() => applyInstallPlan(partialPlan), /ENOENT/);
+      assert.strictEqual(fs.readFileSync(userSkillPath, 'utf8'), '# User skill\n');
+      assert.ok(fs.existsSync(ruleDestinationPath));
+
+      const bridgeState = readInstallState(fixture.installStatePath);
+      assert.ok(!bridgeState.operations.some(operation => (
+        operation.destinationPath === userSkillPath
+      )));
+      assert.ok(bridgeState.operations.some(operation => (
+        operation.destinationPath === ruleDestinationPath
+      )));
+
+      const uninstall = runUninstall(fixture);
+      assert.strictEqual(uninstall.summary.errorCount, 0);
+      assert.strictEqual(fs.readFileSync(userSkillPath, 'utf8'), '# User skill\n');
+      assert.ok(!fs.existsSync(ruleDestinationPath));
+    } finally {
+      cleanup(fixture.tempDir);
+    }
+  })) passed++; else failed++;
+
   if (test('keeps legacy files tracked when the bridge state write fails', () => {
     const fixture = createFixture();
     try {
@@ -567,7 +690,7 @@ function runTests() {
       );
       assert.ok(fixture.operations.every(operation => fs.existsSync(operation.destinationPath)));
       assert.ok(legacyOperations.every(operation => !fs.existsSync(operation.destinationPath)));
-    } finally {
+
       const bridgeState = readInstallState(fixture.installStatePath);
       assert.ok(fixture.operations.every(flatOperation => (
         bridgeState.operations.some(operation => (
@@ -581,12 +704,14 @@ function runTests() {
       const uninstall = runUninstall(fixture);
       assert.strictEqual(uninstall.summary.errorCount, 0);
       assert.ok(fixture.operations.every(operation => !fs.existsSync(operation.destinationPath)));
+    } finally {
       cleanup(fixture.tempDir);
     }
   })) passed++; else failed++;
 
   if (test('rejects a flat skill symlink that escapes the Claude install root', () => {
     if (process.platform === 'win32') {
+      console.log('    ↷ skipped on Windows: symlink privileges vary');
       return;
     }
 
@@ -611,6 +736,7 @@ function runTests() {
 
   if (test('rejects a dangling destination symlink before copying a Claude skill file', () => {
     if (process.platform === 'win32') {
+      console.log('    ↷ skipped on Windows: symlink privileges vary');
       return;
     }
 
