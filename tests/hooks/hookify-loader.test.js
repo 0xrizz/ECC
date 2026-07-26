@@ -210,7 +210,7 @@ function runTests() {
     });
   })) passed++; else failed++;
 
-  if (test('rejects a rule path swapped through a symlink while the file is opened', () => {
+  if (test('opens a rule descriptor before path inspection and rejects a later symlink swap', () => {
     withProject(({ projectRoot, claudeDir }) => {
       const fileName = 'hookify.race.local.md';
       const rulePath = path.join(claudeDir, fileName);
@@ -231,19 +231,28 @@ function runTests() {
         'This outside rule must never be loaded.',
       ].join('\n'));
 
-      const originalOpenSync = fs.openSync;
+      const originalFstatSync = fs.fstatSync;
+      const originalLstatSync = fs.lstatSync;
+      let descriptorOpened = false;
+      let inspectedBeforeOpen = false;
       let swapped = false;
-      fs.openSync = function openWithSwap(target, flags, ...args) {
-        if (!swapped && target === rulePath) {
+      fs.fstatSync = function markDescriptorOpen(descriptor, ...args) {
+        descriptorOpened = true;
+        return originalFstatSync.call(fs, descriptor, ...args);
+      };
+      fs.lstatSync = function inspectWithSwap(target, ...args) {
+        if (target === rulePath && !descriptorOpened) {
+          inspectedBeforeOpen = true;
+        } else if (!swapped && target === rulePath) {
           swapped = true;
           fs.renameSync(rulePath, backupPath);
           fs.symlinkSync(outsidePath, rulePath);
-          const descriptor = originalOpenSync.call(fs, target, fs.constants.O_RDONLY, ...args);
+          const linkStat = originalLstatSync.call(fs, target, ...args);
           fs.unlinkSync(rulePath);
           fs.renameSync(backupPath, rulePath);
-          return descriptor;
+          return linkStat;
         }
-        return originalOpenSync.call(fs, target, flags, ...args);
+        return originalLstatSync.call(fs, target, ...args);
       };
 
       try {
@@ -255,8 +264,11 @@ function runTests() {
         });
         assert.strictEqual(result.rule, null);
         assert.strictEqual(result.diagnostic.code, 'HOOKIFY_RULE_FILE_UNSAFE');
+        assert.strictEqual(inspectedBeforeOpen, false);
+        assert.strictEqual(swapped, true);
       } finally {
-        fs.openSync = originalOpenSync;
+        fs.fstatSync = originalFstatSync;
+        fs.lstatSync = originalLstatSync;
         if (fs.existsSync(backupPath) && !fs.existsSync(rulePath)) {
           fs.renameSync(backupPath, rulePath);
         }

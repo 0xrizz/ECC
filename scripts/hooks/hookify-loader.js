@@ -355,11 +355,53 @@ function loadRuleFile({
   const filePath = path.join(claudeDir, fileName);
   let fileDescriptor;
   try {
+    const noFollow = fs.constants.O_NOFOLLOW || 0;
+    try {
+      fileDescriptor = fs.openSync(filePath, fs.constants.O_RDONLY | noFollow);
+    } catch (error) {
+      if (
+        error &&
+        ['ELOOP', 'EMLINK', 'ENOENT', 'ENOTDIR'].includes(error.code)
+      ) {
+        return {
+          rule: null,
+          diagnostic: diagnostic('HOOKIFY_RULE_FILE_UNSAFE', fileName, 'not a regular file'),
+          bytesRead: 0,
+        };
+      }
+      throw error;
+    }
+    const fileStat = fs.fstatSync(fileDescriptor);
+    if (!fileStat.isFile()) {
+      return {
+        rule: null,
+        diagnostic: diagnostic('HOOKIFY_RULE_FILE_UNSAFE', fileName, 'not a regular file'),
+        bytesRead: 0,
+      };
+    }
+
     const linkStat = fs.lstatSync(filePath);
     if (linkStat.isSymbolicLink() || !linkStat.isFile()) {
       return {
         rule: null,
         diagnostic: diagnostic('HOOKIFY_RULE_FILE_UNSAFE', fileName, 'not a regular file'),
+        bytesRead: 0,
+      };
+    }
+    if (
+      fileStat.dev !== linkStat.dev ||
+      fileStat.ino !== linkStat.ino ||
+      fileStat.mode !== linkStat.mode ||
+      fileStat.size !== linkStat.size ||
+      fileStat.mtimeMs !== linkStat.mtimeMs
+    ) {
+      return {
+        rule: null,
+        diagnostic: diagnostic(
+          'HOOKIFY_RULE_FILE_UNSAFE',
+          fileName,
+          'rule identity changed during evaluation'
+        ),
         bytesRead: 0,
       };
     }
@@ -383,49 +425,11 @@ function loadRuleFile({
     ) {
       return {
         rule: null,
-        diagnostic: diagnostic('HOOKIFY_RULE_FILE_UNSAFE', fileName, 'resolved outside project .claude'),
-        bytesRead: 0,
-      };
-    }
-
-    const noFollow = fs.constants.O_NOFOLLOW || 0;
-    fileDescriptor = fs.openSync(filePath, fs.constants.O_RDONLY | noFollow);
-    const fileStat = fs.fstatSync(fileDescriptor);
-    if (
-      fileStat.dev !== linkStat.dev ||
-      fileStat.ino !== linkStat.ino ||
-      fileStat.mode !== linkStat.mode ||
-      fileStat.size !== linkStat.size ||
-      fileStat.mtimeMs !== linkStat.mtimeMs
-    ) {
-      return {
-        rule: null,
         diagnostic: diagnostic(
           'HOOKIFY_RULE_FILE_UNSAFE',
           fileName,
-          'rule identity changed during evaluation'
+          'resolved outside project .claude'
         ),
-        bytesRead: 0,
-      };
-    }
-    if (
-      fs.realpathSync(claudeDir) !== realDirectory ||
-      fs.realpathSync(filePath) !== realFile
-    ) {
-      return {
-        rule: null,
-        diagnostic: diagnostic(
-          'HOOKIFY_RULE_FILE_UNSAFE',
-          fileName,
-          'rule path changed during evaluation'
-        ),
-        bytesRead: 0,
-      };
-    }
-    if (!fileStat.isFile()) {
-      return {
-        rule: null,
-        diagnostic: diagnostic('HOOKIFY_RULE_FILE_UNSAFE', fileName, 'not a regular file'),
         bytesRead: 0,
       };
     }
