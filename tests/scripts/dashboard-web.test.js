@@ -36,6 +36,29 @@ function cleanup(dirPath) {
   fs.rmSync(dirPath, { recursive: true, force: true });
 }
 
+function withTempDir(prefix, fn) {
+  const dirPath = createTempDir(prefix);
+  try {
+    return fn(dirPath);
+  } finally {
+    cleanup(dirPath);
+  }
+}
+
+test('withTempDir removes temp directories when the callback throws', () => {
+  let createdDir = '';
+  assert.throws(() => {
+    withTempDir('ecc-test-', dirPath => {
+      createdDir = dirPath;
+      assert.ok(fs.existsSync(createdDir));
+      throw new Error('fixture failure');
+    });
+  }, /fixture failure/);
+
+  assert.ok(createdDir);
+  assert.ok(!fs.existsSync(createdDir));
+});
+
 function writeFile(rootDir, relativePath, content) {
   const targetPath = path.join(rootDir, relativePath);
   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
@@ -127,22 +150,22 @@ test('readFrontmatter parses array tools field', () => {
 
 test('readFrontmatter preserves scoped tools in legacy flow sequences', () => {
   const { readFrontmatter } = require(SCRIPT);
-  testRoot = createTempDir('ecc-test-');
-  writeFile(testRoot, 'agent.md', [
-    '---',
-    'name: scoped-agent',
-    'tools: [Agent(worker, researcher), Read, Bash(git commit:*, git status:*)]',
-    '---',
-    'body',
-  ].join('\n'));
+  withTempDir('ecc-test-', tempDir => {
+    writeFile(tempDir, 'agent.md', [
+      '---',
+      'name: scoped-agent',
+      'tools: [Agent(worker, researcher), Read, Bash(git commit:*, git status:*)]',
+      '---',
+      'body',
+    ].join('\n'));
 
-  const fm = readFrontmatter(path.join(testRoot, 'agent.md'));
-  assert.deepStrictEqual(fm.tools, [
-    'Agent(worker, researcher)',
-    'Read',
-    'Bash(git commit:*, git status:*)',
-  ]);
-  cleanup(testRoot);
+    const fm = readFrontmatter(path.join(tempDir, 'agent.md'));
+    assert.deepStrictEqual(fm.tools, [
+      'Agent(worker, researcher)',
+      'Read',
+      'Bash(git commit:*, git status:*)',
+    ]);
+  });
 });
 
 test('readFrontmatter normalizes comma-separated scalar tools to an array', () => {
