@@ -68,14 +68,20 @@ The execution sequence is deliberately read-only first and promotion-gated:
    and audit every read without logging returned content. Version every tool's
    request and response schema, validate both at the boundary, and return the
    common `{success, data, error, pagination}` envelope. Bounded list and diff
-   responses include cursor, `has_more`, and `truncated` metadata.
+   responses include cursor, `has_more`, and `truncated` metadata. Bind every
+   cursor to an immutable session/worktree revision; reject stale cursors and
+   require pagination to restart when that revision is no longer available.
 3. **ECC2 MCP mutation plane.** Add `create_task`, `merge_task`, and
    `approve_tool` only after the read plane is stable. Require explicit
    capability gates, immutable audit receipts, dry-run previews, and the
    existing risk/profile policy at every mutation boundary. Caller identity,
    workspace ownership, and per-tool authorization fail closed before inputs
    reach the store or filesystem. Mutation tools use the same versioned,
-   boundary-validated request and response schemas and common envelope.
+   boundary-validated request and response schemas and common envelope. Apply
+   per-caller and per-workspace rate limits before mutation processing and fail
+   closed when the limiter is unavailable. Persist the immutable receipt before
+   any side effect, or use an atomic transaction/outbox whose reconciliation
+   guarantees every successful mutation has a durable receipt.
 4. **Worktree lifecycle contract.** Define and schema-validate
    `ecc.worktree.yml`; specify `new`, `split`, `fork`, and `close` state
    transitions; define bounded context seeding and lifecycle hooks without
@@ -113,9 +119,11 @@ The execution sequence is deliberately read-only first and promotion-gated:
    import/export only after the policy and promotion contracts plus
    AgentShield's signed-provenance and registry-lock verification are stable.
    Import and export deny by default when provenance or lock verification is
-   missing, invalid, or unavailable. Training or inference automation remains
-   deferred until telemetry, evaluation, consent, and rollback gates are
-   operational.
+   missing, invalid, or unavailable. Before any imported artifact reaches a
+   store or filesystem operation, validate its versioned schema, bounded size,
+   contained paths, and content policy, and reject malformed or untrusted
+   input with bounded errors. Training or inference automation remains deferred
+   until telemetry, evaluation, consent, and rollback gates are operational.
 
 Each numbered item is a separate implementation lane. Do not combine the
 read-only MCP plane with mutations, the telemetry schema with live export, or
