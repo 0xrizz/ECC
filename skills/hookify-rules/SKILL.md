@@ -7,7 +7,10 @@ description: This skill should be used when the user asks to create a hookify ru
 
 ## Overview
 
-Hookify rules are markdown files with YAML frontmatter that define patterns to watch for and messages to show when those patterns match. Rules are stored in `.claude/hookify.{rule-name}.local.md` files.
+Hookify rules are Markdown files with YAML frontmatter that define patterns to
+watch for and messages to show when those patterns match. ECC's built-in Node.js
+runtime loads them from the current project `.claude/` directory for
+PreToolUse, PostToolUse, UserPromptSubmit, and Stop.
 
 ## Rule File Format
 
@@ -32,8 +35,10 @@ Can include markdown formatting, warnings, suggestions, etc.
 | name | Yes | kebab-case string | Unique identifier (verb-first: warn-*, block-*, require-*) |
 | enabled | Yes | true/false | Toggle without deleting |
 | event | Yes | bash/file/stop/prompt/all | Which hook event triggers this |
-| action | No | warn/block | warn (default) shows message; block prevents operation |
+| action | No | warn/block | warn (default) shows a message; block uses the event-specific behavior below |
 | pattern | Yes* | regex string | Pattern to match (*or use conditions for complex rules) |
+| conditions | Yes* | list | All field/operator/pattern entries must match (*use exactly one of pattern or conditions) |
+| tool_matcher | No | `*` or exact names separated by `\|` | Limits a rule to tools such as `Bash` or `Write\|Edit` |
 
 ### Advanced Format (Multiple Conditions)
 
@@ -58,10 +63,15 @@ You're adding an API key to a .env file. Ensure this file is in .gitignore!
 - bash: `command`
 - file: `file_path`, `new_text`, `old_text`, `content`
 - prompt: `user_prompt`
+- stop: `content` (the last assistant message; transcripts are never read)
+- all: any field above when it exists for the current event; unavailable
+  fields do not match
 
 **Operators:** `regex_match`, `contains`, `equals`, `not_contains`, `starts_with`, `ends_with`
 
 All conditions must match for rule to trigger.
+`regex_match` is case-insensitive. The literal string operators are
+case-sensitive.
 
 ## Event Type Guide
 
@@ -78,10 +88,30 @@ Match Edit/Write/MultiEdit operations:
 - Sensitive files: `\.env$`, `credentials`, `\.pem$`
 
 ### stop Events
-Completion checks and reminders. Pattern `.*` matches always.
+Completion checks and reminders against the last assistant message. Pattern
+`.*` matches every non-empty or empty final message. Use `action: block` when
+Claude must continue; a `warn` Stop rule is only a non-blocking user-visible
+system message.
 
 ### prompt Events
-Match user prompt content for workflow enforcement.
+Match Claude Code's submitted `prompt` through the rule field `user_prompt`.
+
+## Runtime Behavior
+
+- `action: block|warn` is enforced with Claude Code's event-specific structured
+  output.
+- PreToolUse blocks deny a pending tool call.
+- UserPromptSubmit blocks reject the prompt.
+- Stop blocks continue the conversation.
+- PostToolUse blocks provide corrective feedback only; the completed tool
+  cannot be undone.
+- Warnings reach Claude through `additionalContext` for PreToolUse,
+  PostToolUse, and UserPromptSubmit.
+- Stop warnings do not continue Claude. Use a blocking Stop rule for that.
+- Recursive Stop evaluation is skipped when `stop_hook_active` is already
+  true, so an always-matching block cannot continue forever.
+- Hookify never mutates tool input and never reads `transcript_path`.
+- Malformed or unsafe rules fail open with a bounded structured diagnostic.
 
 ## Pattern Writing Tips
 
@@ -98,14 +128,22 @@ Match user prompt content for workflow enforcement.
 
 ### Testing
 ```bash
-python3 -c "import re; print(re.search(r'your_pattern', 'test text'))"
+node -e "console.log(new RegExp('your_pattern', 'i').test('test text'))"
 ```
+
+Regex evaluation runs in a resource-limited worker with one hard total
+deadline, but patterns should still be kept focused and short.
 
 ## File Organization
 
-- **Location**: `.claude/` directory in project root
+- **Location**: the real (not symlinked) `.claude/` directory in the project root
 - **Naming**: `.claude/hookify.{descriptive-name}.local.md`
 - **Gitignore**: Add `.claude/*.local.md` to `.gitignore`
+
+The loader accepts only direct regular files and a strict frontmatter subset.
+Unknown fields, YAML anchors/tags, traversal, symlinks, and non-regular files
+are rejected. Current bounds are 64 rules, 64 KiB per file, 512 KiB total,
+512 characters per pattern, 16 conditions, and 4 KiB per message.
 
 ## Commands
 

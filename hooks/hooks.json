@@ -94,6 +94,31 @@
         ],
         "description": "Fact-forcing gate: block first Edit/Write/MultiEdit per file and demand investigation (importers, data schemas, user instruction) before allowing",
         "id": "pre:edit-write:gateguard-fact-force"
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const p=require('path');const r=(function(){var p=require('path'),f=require('fs'),o=require('os');var e=process.env.CLAUDE_PLUGIN_ROOT;if(e&&e.trim())return e.trim();var d=p.join(o.homedir(),'.claude');function L(x){try{return require(p.join(x,'scripts','lib','resolve-ecc-root')).resolveEccRoot()}catch(_){return null}}var r=L(d);if(r)return r;var s=['ecc','ecc@ecc','marketplaces/ecc','everything-claude-code','everything-claude-code@everything-claude-code','marketplaces/everything-claude-code'];for(var i=0;i<s.length;i++){r=L(p.join(d,'plugins',s[i]));if(r)return r}try{var g=['ecc','everything-claude-code'];for(var j=0;j<g.length;j++){var c=p.join(d,'plugins','cache',g[j]);var O=f.readdirSync(c);for(var k=0;k<O.length;k++){var q=p.join(c,O[k]);var V=f.readdirSync(q);for(var m=0;m<V.length;m++){r=L(p.join(q,V[m]));if(r)return r}}}}catch(_){}return d})();const s=p.join(r,'scripts/hooks/hookify-runner.js');process.env.CLAUDE_PLUGIN_ROOT=r;process.argv.splice(1,0,s);try{require(s).cli().catch(()=>{process.exitCode=0;process.stdout.write('{}')})}catch(_){process.stdout.write('{}')}\" PreToolUse pre:hookify minimal,standard,strict",
+            "timeout": 5
+          }
+        ],
+        "description": "Evaluate project-local Hookify rules before tool execution",
+        "id": "pre:hookify"
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const p=require('path');const r=(function(){var p=require('path'),f=require('fs'),o=require('os');var e=process.env.CLAUDE_PLUGIN_ROOT;if(e&&e.trim())return e.trim();var d=p.join(o.homedir(),'.claude');function L(x){try{return require(p.join(x,'scripts','lib','resolve-ecc-root')).resolveEccRoot()}catch(_){return null}}var r=L(d);if(r)return r;var s=['ecc','ecc@ecc','marketplaces/ecc','everything-claude-code','everything-claude-code@everything-claude-code','marketplaces/everything-claude-code'];for(var i=0;i<s.length;i++){r=L(p.join(d,'plugins',s[i]));if(r)return r}try{var g=['ecc','everything-claude-code'];for(var j=0;j<g.length;j++){var c=p.join(d,'plugins','cache',g[j]);var O=f.readdirSync(c);for(var k=0;k<O.length;k++){var q=p.join(c,O[k]);var V=f.readdirSync(q);for(var m=0;m<V.length;m++){r=L(p.join(q,V[m]));if(r)return r}}}}catch(_){}return d})();const s=p.join(r,'scripts/hooks/hookify-runner.js');process.env.CLAUDE_PLUGIN_ROOT=r;process.argv.splice(1,0,s);try{require(s).cli().catch(()=>{process.exitCode=0;process.stdout.write('{}')})}catch(_){process.stdout.write('{}')}\" UserPromptSubmit prompt:hookify minimal,standard,strict",
+            "timeout": 5
+          }
+        ],
+        "description": "Evaluate project-local Hookify rules when a prompt is submitted",
+        "id": "prompt:hookify"
       }
     ],
     "PreCompact": [
@@ -143,7 +168,7 @@
             "timeout": 30
           }
         ],
-        "description": "Run synchronous PostToolUse hooks in one process while preserving per-hook controls",
+        "description": "Run synchronous PostToolUse hooks, including Hookify, in one process while preserving per-hook controls",
         "id": "post:dispatcher:sync"
       },
       {
@@ -174,6 +199,17 @@
       }
     ],
     "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const p=require('path');const r=(function(){var p=require('path'),f=require('fs'),o=require('os');var e=process.env.CLAUDE_PLUGIN_ROOT;if(e&&e.trim())return e.trim();var d=p.join(o.homedir(),'.claude');function L(x){try{return require(p.join(x,'scripts','lib','resolve-ecc-root')).resolveEccRoot()}catch(_){return null}}var r=L(d);if(r)return r;var s=['ecc','ecc@ecc','marketplaces/ecc','everything-claude-code','everything-claude-code@everything-claude-code','marketplaces/everything-claude-code'];for(var i=0;i<s.length;i++){r=L(p.join(d,'plugins',s[i]));if(r)return r}try{var g=['ecc','everything-claude-code'];for(var j=0;j<g.length;j++){var c=p.join(d,'plugins','cache',g[j]);var O=f.readdirSync(c);for(var k=0;k<O.length;k++){var q=p.join(c,O[k]);var V=f.readdirSync(q);for(var m=0;m<V.length;m++){r=L(p.join(q,V[m]));if(r)return r}}}}catch(_){}return d})();const s=p.join(r,'scripts/hooks/hookify-runner.js');process.env.CLAUDE_PLUGIN_ROOT=r;process.argv.splice(1,0,s);try{require(s).cli().catch(()=>{process.exitCode=0;process.stdout.write('{}')})}catch(_){process.stdout.write('{}')}\" Stop stop:hookify minimal,standard,strict",
+            "timeout": 5
+          }
+        ],
+        "description": "Evaluate project-local Hookify completion rules without reading transcripts",
+        "id": "stop:hookify"
+      },
       {
         "matcher": "*",
         "hooks": [

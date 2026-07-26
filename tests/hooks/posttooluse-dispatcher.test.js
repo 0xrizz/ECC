@@ -112,23 +112,24 @@ function runTests() {
             'post:governance-capture',
             'post:session-activity-tracker',
             'post:ecc-metrics-bridge',
-            'post:ecc-context-monitor'
+            'post:ecc-context-monitor',
+            'post:hookify'
           ],
           async: ['post:quality-gate', 'post:observe:continuous-learning']
         },
         {
           tool: 'Write',
-          sync: ['post:edit:design-quality-check', 'post:edit:accumulator', 'post:governance-capture', 'post:session-activity-tracker', 'post:ecc-metrics-bridge', 'post:ecc-context-monitor'],
+          sync: ['post:edit:design-quality-check', 'post:edit:accumulator', 'post:governance-capture', 'post:session-activity-tracker', 'post:ecc-metrics-bridge', 'post:ecc-context-monitor', 'post:hookify'],
           async: ['post:quality-gate', 'post:observe:continuous-learning']
         },
         {
           tool: 'Bash',
-          sync: ['post:governance-capture', 'post:session-activity-tracker', 'post:ecc-metrics-bridge', 'post:ecc-context-monitor'],
+          sync: ['post:governance-capture', 'post:session-activity-tracker', 'post:ecc-metrics-bridge', 'post:ecc-context-monitor', 'post:hookify'],
           async: ['post:bash:dispatcher', 'post:observe:continuous-learning']
         },
         {
           tool: 'Read',
-          sync: ['post:session-activity-tracker', 'post:ecc-metrics-bridge', 'post:ecc-context-monitor'],
+          sync: ['post:session-activity-tracker', 'post:ecc-metrics-bridge', 'post:ecc-context-monitor', 'post:hookify'],
           async: ['post:observe:continuous-learning']
         }
       ];
@@ -172,6 +173,7 @@ function runTests() {
         'post:session-activity-tracker',
         'post:ecc-metrics-bridge',
         'post:ecc-context-monitor',
+        'post:hookify',
         'post:quality-gate',
         'post:observe:continuous-learning'
       ]);
@@ -213,7 +215,7 @@ function runTests() {
         ECC_HOOK_PROFILE: 'minimal'
       });
       assert.strictEqual(minimalSync.status, 0, minimalSync.stderr);
-      assert.deepStrictEqual(previewedIds(minimalSync.stderr), ['post:ecc-metrics-bridge']);
+      assert.deepStrictEqual(previewedIds(minimalSync.stderr), ['post:ecc-metrics-bridge', 'post:hookify']);
 
       const minimalAsync = runDispatcher('async', 'Bash', {
         ECC_DRY_RUN: '1',
@@ -398,7 +400,7 @@ function runTests() {
   else failed++;
 
   if (
-    test('multiple additionalContext outputs merge; raw stdout conflicts warn', () => {
+    test('multiple additionalContext outputs merge with structured block decisions; raw stdout conflicts warn', () => {
       const { mergeHookStdout, runHooks } = require(dispatcherPath);
       const envelope = context =>
         JSON.stringify({
@@ -417,6 +419,30 @@ function runTests() {
       });
       assert.strictEqual(merged.stdout, envelope('first warning\nsecond warning'), 'context envelopes should merge into one');
       assert.ok(!merged.stderr.includes('dropped'), merged.stderr);
+
+      const blocked = mergeHookStdout([
+        { id: 'post:test:ctx', stdout: envelope('corrective context') },
+        {
+          id: 'post:hookify',
+          stdout: JSON.stringify({
+            decision: 'block',
+            reason: 'The completed tool needs correction.',
+            hookSpecificOutput: {
+              hookEventName: 'PostToolUse',
+              additionalContext: 'warning context',
+            },
+          }),
+        },
+      ]);
+      assert.deepStrictEqual(JSON.parse(blocked.stdout), {
+        decision: 'block',
+        reason: 'The completed tool needs correction.',
+        hookSpecificOutput: {
+          hookEventName: 'PostToolUse',
+          additionalContext: 'corrective context\nwarning context',
+        },
+      });
+      assert.strictEqual(blocked.warning, '');
 
       const conflicting = mergeHookStdout([
         { id: 'post:test:raw', stdout: 'plain output' },

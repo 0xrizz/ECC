@@ -19,6 +19,7 @@ const { run: runSessionActivityTracker } = require('./session-activity-tracker')
 const { run: runObserve } = require('./observe-runner');
 const { run: runMetricsBridge } = require('./ecc-metrics-bridge');
 const { run: runContextMonitor } = require('./ecc-context-monitor');
+const { run: runHookify } = require('./hookify-runner');
 
 const MAX_STDIN = 1024 * 1024;
 
@@ -29,7 +30,20 @@ const SYNC_HOOKS = [
   { id: 'post:governance-capture', matcher: 'Bash|Write|Edit|MultiEdit', profiles: 'standard,strict', script: 'scripts/hooks/governance-capture.js', run: runGovernanceCapture },
   { id: 'post:session-activity-tracker', matcher: '*', profiles: 'standard,strict', script: 'scripts/hooks/session-activity-tracker.js', run: runSessionActivityTracker },
   { id: 'post:ecc-metrics-bridge', matcher: '*', profiles: 'minimal,standard,strict', script: 'scripts/hooks/ecc-metrics-bridge.js', run: runMetricsBridge },
-  { id: 'post:ecc-context-monitor', matcher: '*', profiles: 'standard,strict', script: 'scripts/hooks/ecc-context-monitor.js', run: runContextMonitor }
+  { id: 'post:ecc-context-monitor', matcher: '*', profiles: 'standard,strict', script: 'scripts/hooks/ecc-context-monitor.js', run: runContextMonitor },
+  {
+    id: 'post:hookify',
+    matcher: '*',
+    profiles: 'minimal,standard,strict',
+    script: 'scripts/hooks/hookify-runner.js',
+    run(raw) {
+      const result = runHookify(raw, {
+        expectedEvent: 'PostToolUse',
+        projectRoot: process.cwd()
+      });
+      return result.stdout === '{}' ? { ...result, stdout: '' } : result;
+    }
+  }
 ];
 
 const ASYNC_HOOKS = [
@@ -132,12 +146,23 @@ function appendLine(current, next) {
   return current + (String(next).endsWith('\n') ? String(next) : `${next}\n`);
 }
 
-function parseAdditionalContext(stdout) {
+function parseStructuredPostOutput(stdout) {
   try {
     const parsed = JSON.parse(stdout);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
     const output = parsed?.hookSpecificOutput;
-    if (output?.hookEventName !== 'PostToolUse') return null;
-    return typeof output.additionalContext === 'string' ? output.additionalContext : null;
+    const context =
+      output?.hookEventName === 'PostToolUse' &&
+      typeof output.additionalContext === 'string'
+        ? output.additionalContext
+        : '';
+    const blocked = parsed.decision === 'block' && typeof parsed.reason === 'string';
+    if (!context && !blocked) return null;
+    return {
+      context,
+      decision: blocked ? 'block' : null,
+      reason: blocked ? parsed.reason : ''
+    };
   } catch {
     return null;
   }
@@ -147,15 +172,27 @@ function mergeHookStdout(outputs) {
   if (outputs.length === 0) return { stdout: '', warning: '' };
   if (outputs.length === 1) return { stdout: outputs[0].stdout, warning: '' };
 
-  const contexts = outputs.map(output => parseAdditionalContext(output.stdout));
-  if (contexts.every(context => context !== null)) {
-    return {
-      stdout: JSON.stringify({
-        hookSpecificOutput: {
-          hookEventName: 'PostToolUse',
-          additionalContext: contexts.join('\n')
+  const structured = outputs.map(output => parseStructuredPostOutput(output.stdout));
+  if (structured.every(output => output !== null)) {
+    const contexts = structured.map(output => output.context).filter(Boolean);
+    const reasons = structured
+      .filter(output => output.decision === 'block')
+      .map(output => output.reason);
+    const payload = {
+      ...(reasons.length > 0
+        ? { decision: 'block', reason: reasons.join('\n\n') }
+        : {}),
+      ...(contexts.length > 0
+        ? {
+          hookSpecificOutput: {
+            hookEventName: 'PostToolUse',
+            additionalContext: contexts.join('\n')
+          }
         }
-      }),
+        : {})
+    };
+    return {
+      stdout: JSON.stringify(payload),
       warning: ''
     };
   }

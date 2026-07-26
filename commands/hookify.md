@@ -2,7 +2,7 @@
 description: Create hooks to prevent unwanted behaviors from conversation analysis or explicit instructions
 ---
 
-Create hook rules to prevent unwanted Claude Code behaviors by analyzing conversation patterns or explicit user instructions.
+Create project-local rules for ECC's built-in Node.js Hookify runtime by analyzing conversation patterns or explicit user instructions.
 
 ## Usage
 
@@ -45,6 +45,41 @@ pattern: "regex pattern"
 Message shown when rule triggers.
 ```
 
+Use exactly one of `pattern` or `conditions`. For precise matching, use the
+condition form:
+
+```yaml
+---
+name: warn-env-secret
+enabled: true
+event: file
+action: warn
+tool_matcher: Write|Edit
+conditions:
+  - field: file_path
+    operator: ends_with
+    pattern: .env
+  - field: content
+    operator: contains
+    pattern: API_KEY
+---
+Keep credentials out of source control.
+```
+
+Supported condition operators are `regex_match`, `contains`, `equals`,
+`not_contains`, `starts_with`, and `ends_with`. All conditions must match.
+The complete schema and event-specific fields are in `/hookify-help`.
+
 ### Step 4: Confirm
 
-Report created rules and how to manage them with `/hookify-list` and `/hookify-configure`.
+Report:
+
+- the files created
+- whether each rule warns or blocks
+- which lifecycle event enforces it
+- how to manage it with `/hookify-list` and `/hookify-configure`
+
+Be precise about enforcement. A PreToolUse block prevents the tool call.
+A UserPromptSubmit block rejects the prompt. A Stop block makes Claude
+continue. A PostToolUse block only supplies corrective feedback because the
+tool has already completed.

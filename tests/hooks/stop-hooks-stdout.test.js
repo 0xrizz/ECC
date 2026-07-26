@@ -207,14 +207,25 @@ assert.ok(multibytePayload.length < MAX_STDIN, 'fixture must stay below the runn
 assert.ok(Buffer.byteLength(multibytePayload) > MAX_STDIN, 'fixture must exceed the default byte buffer');
 
 for (const entry of hooksConfig.hooks.Stop) {
+  const multibyteExpectation = entry.id === 'stop:hookify'
+    ? 'suppresses a multibyte payload above its byte cap'
+    : 'preserves a multibyte sub-cap payload';
   if (
-    test(`${entry.id} registered wrapper preserves a multibyte sub-cap payload`, () => {
+    test(`${entry.id} registered wrapper ${multibyteExpectation}`, () => {
       const result = runRegisteredStopHook(entry, multibytePayload);
       assert.strictEqual(
         result.status,
         0,
         `${entry.id}: expected exit 0, got ${result.status}: ${result.stderr}`
       );
+      if (entry.id === 'stop:hookify') {
+        assert.strictEqual(
+          result.stdout,
+          '',
+          'stop:hookify must suppress disabled pass-through above its 256 KiB byte cap'
+        );
+        return;
+      }
       assert.ok(
         result.stdout === multibytePayload,
         `${entry.id}: registered wrapper must echo ${Buffer.byteLength(multibytePayload)} bytes uncut (got ${Buffer.byteLength(result.stdout)})`
