@@ -8,7 +8,7 @@ const { spawnSync } = require('child_process');
 
 const MEMORY_SCRIPT = path.join(__dirname, '..', '..', 'scripts', 'memory.js');
 const ECC_SCRIPT = path.join(__dirname, '..', '..', 'scripts', 'ecc.js');
-const { sanitizeTerminalText } = require(MEMORY_SCRIPT);
+const { readBoundedStdin, sanitizeTerminalText } = require(MEMORY_SCRIPT);
 
 let passed = 0;
 let failed = 0;
@@ -100,6 +100,68 @@ test('routes stdin through ecc memory without dropping the body', () => {
     assert.strictEqual(read.memory.body, 'The router must preserve this exact body.');
   } finally {
     fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('retries transient stdin EAGAIN without busy-spinning and preserves byte bounds', () => {
+  const originalReadSync = fs.readSync;
+  let readCalls = 0;
+  let waitCalls = 0;
+  try {
+    fs.readSync = (_descriptor, buffer) => {
+      readCalls += 1;
+      if (readCalls <= 2) {
+        const error = new Error('temporarily unavailable');
+        error.code = 'EAGAIN';
+        throw error;
+      }
+      if (readCalls === 3) {
+        buffer.write('ready');
+        return 5;
+      }
+      return 0;
+    };
+
+    assert.strictEqual(readBoundedStdin(8, {
+      retryDelayMs: 1,
+      maxRetryWaitMs: 4,
+      wait: () => {
+        waitCalls += 1;
+      },
+    }), 'ready');
+    assert.strictEqual(readCalls, 4);
+    assert.strictEqual(waitCalls, 2);
+  } finally {
+    fs.readSync = originalReadSync;
+  }
+});
+
+test('bounds persistent stdin EAGAIN retries instead of waiting forever', () => {
+  const originalReadSync = fs.readSync;
+  let readCalls = 0;
+  let waitCalls = 0;
+  try {
+    fs.readSync = () => {
+      readCalls += 1;
+      const error = new Error('temporarily unavailable');
+      error.code = 'EAGAIN';
+      throw error;
+    };
+
+    assert.throws(
+      () => readBoundedStdin(8, {
+        retryDelayMs: 1,
+        maxRetryWaitMs: 3,
+        wait: () => {
+          waitCalls += 1;
+        },
+      }),
+      /standard input remained unavailable/i
+    );
+    assert.strictEqual(readCalls, 4);
+    assert.strictEqual(waitCalls, 3);
+  } finally {
+    fs.readSync = originalReadSync;
   }
 });
 
@@ -310,6 +372,20 @@ test('rejects ambiguous body sources and does not expose a trust promotion flag'
     ], fixture, { input: ' \n\t' });
     assert.notStrictEqual(empty.status, 0);
     assert.ok(empty.stderr.includes('non-whitespace context'));
+
+    const invalidUtf8Body = path.join(fixture.root, 'invalid-utf8.md');
+    fs.writeFileSync(invalidUtf8Body, Buffer.from([0x61, 0xc3, 0x28, 0x62]));
+    const invalidUtf8 = run(MEMORY_SCRIPT, [
+      'save',
+      '--title', 'Invalid UTF-8',
+      '--body-file', invalidUtf8Body,
+    ], fixture);
+    assert.notStrictEqual(invalidUtf8.status, 0);
+    assert.match(invalidUtf8.stderr, /valid UTF-8/i);
+    assert.strictEqual(
+      fs.existsSync(path.join(fixture.projectRoot, '.ecc', 'memory')),
+      false
+    );
   } finally {
     fs.rmSync(fixture.root, { recursive: true, force: true });
   }

@@ -6,6 +6,7 @@ const path = require('path');
 
 const {
   MAX_BODY_BYTES,
+  decodeUtf8,
   doctorMemoryVault,
   initializeVault,
   readMemoryById,
@@ -36,6 +37,9 @@ const BOOLEAN_OPTIONS = new Map([
   ['--json', 'json'],
   ['--stdin', 'stdin'],
 ]);
+const DEFAULT_STDIN_RETRY_DELAY_MS = 10;
+const MAX_STDIN_RETRY_WAIT_MS = 5_000;
+const STDIN_RETRY_SIGNAL = new Int32Array(new SharedArrayBuffer(4));
 
 function usage() {
   return `
@@ -140,12 +144,42 @@ function oneValue(values, label, fallback = null) {
   return values[0];
 }
 
-function readBoundedStdin(maxBytes) {
+function waitForStdinRetry(milliseconds) {
+  Atomics.wait(STDIN_RETRY_SIGNAL, 0, 0, milliseconds);
+}
+
+function readBoundedStdin(maxBytes, retryOptions = {}) {
+  const retryDelayMs = Number.isInteger(retryOptions.retryDelayMs)
+    && retryOptions.retryDelayMs > 0
+    ? retryOptions.retryDelayMs
+    : DEFAULT_STDIN_RETRY_DELAY_MS;
+  const maxRetryWaitMs = Number.isInteger(retryOptions.maxRetryWaitMs)
+    && retryOptions.maxRetryWaitMs >= 0
+    ? retryOptions.maxRetryWaitMs
+    : MAX_STDIN_RETRY_WAIT_MS;
+  const wait = typeof retryOptions.wait === 'function'
+    ? retryOptions.wait
+    : waitForStdinRetry;
   const chunks = [];
   let total = 0;
+  let remainingRetryWaitMs = maxRetryWaitMs;
   while (total <= maxBytes) {
     const buffer = Buffer.alloc(Math.min(64 * 1024, maxBytes + 1 - total));
-    const bytesRead = fs.readSync(0, buffer, 0, buffer.length, null);
+    let bytesRead;
+    try {
+      bytesRead = fs.readSync(0, buffer, 0, buffer.length, null);
+    } catch (error) {
+      const retryable = ['EAGAIN', 'EWOULDBLOCK', 'EINTR'].includes(error?.code);
+      if (!retryable) throw error;
+      if (remainingRetryWaitMs < retryDelayMs) {
+        throw new Error(
+          `Standard input remained unavailable after ${maxRetryWaitMs}ms.`
+        );
+      }
+      wait(retryDelayMs);
+      remainingRetryWaitMs -= retryDelayMs;
+      continue;
+    }
     if (bytesRead === 0) break;
     chunks.push(buffer.subarray(0, bytesRead));
     total += bytesRead;
@@ -153,7 +187,7 @@ function readBoundedStdin(maxBytes) {
   if (total > maxBytes) {
     throw new Error(`memory body is too large (maximum ${maxBytes} bytes).`);
   }
-  return Buffer.concat(chunks, total).toString('utf8');
+  return decodeUtf8(Buffer.concat(chunks, total), 'memory body from standard input');
 }
 
 function readBody(options) {

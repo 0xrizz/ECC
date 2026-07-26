@@ -10,6 +10,23 @@ Use the ECC Memory Vault as the common context layer between harnesses. The
 vault stores portable `ecc.memory.v1` Markdown documents rather than
 harness-specific transcripts or inboxes.
 
+## Runtime Prerequisite
+
+This skill is guidance, not the Memory Vault executable. Skill-only, minimal,
+manual, and Claude plugin installs do not create the required commands on
+`PATH`. Install the `ecc-universal` npm runtime separately before using the CLI
+or MCP examples:
+
+```bash
+npm install -g ecc-universal
+ecc memory --help
+command -v ecc-memory-mcp
+```
+
+A repository checkout may instead run the CLI as
+`node scripts/ecc.js memory ...`, but MCP configurations that name
+`ecc-memory-mcp` still require that binary on `PATH`.
+
 ## When To Use
 
 - Save durable context that another agent or later session will need.

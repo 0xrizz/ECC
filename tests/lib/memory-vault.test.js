@@ -7,6 +7,9 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const {
+  MAX_DIAGNOSTICS,
+  MAX_FILES,
+  MAX_SCAN_BYTES,
   MEMORY_SCHEMA_VERSION,
   MEMORY_KINDS,
   doctorMemoryVault,
@@ -169,6 +172,21 @@ test('round-trips the strict ecc.memory.v1 Markdown frontmatter contract', () =>
   assert.deepStrictEqual(parseMemoryDocument(serialized, 'handoff.md'), original);
 });
 
+test('accepts CRLF frontmatter delimiters and line endings', () => {
+  const original = baseMemory();
+  const serialized = serializeMemoryDocument(original).replace(/\n/g, '\r\n');
+  assert.deepStrictEqual(parseMemoryDocument(serialized, 'windows.md'), original);
+});
+
+test('requires the closing frontmatter marker to occupy an exact delimiter line', () => {
+  const malformed = serializeMemoryDocument(baseMemory())
+    .replace('\n---\n\n', '\n---NOT-A-DELIMITER\n\n');
+  assert.throws(
+    () => parseMemoryDocument(malformed, 'malformed-closing.md'),
+    /closing frontmatter|frontmatter line/i
+  );
+});
+
 test('rejects malformed, unknown-schema, and invalid metadata documents', () => {
   assert.throws(() => parseMemoryDocument('not frontmatter', 'bad.md'), /frontmatter/i);
   assert.throws(
@@ -249,6 +267,30 @@ test('never overwrites a duplicate ID', () => {
   }
 });
 
+test('never follows a pre-existing destination symlink during create-only publication', () => {
+  const fixture = createFixture();
+  const outside = path.join(fixture.root, 'outside.md');
+  try {
+    const notes = path.join(fixture.roots.project, 'notes');
+    fs.mkdirSync(notes, { recursive: true });
+    fs.writeFileSync(outside, 'outside sentinel');
+    const destination = path.join(notes, 'mem_20260726_01kexample.md');
+    fs.symlinkSync(outside, destination);
+
+    assert.throws(
+      () => saveMemory(
+        { title: 'Must not overwrite', body: 'create-only content' },
+        fixedOptions(fixture.roots)
+      ),
+      /already exists|create-only|outside|refusing/i
+    );
+    assert.strictEqual(fs.readFileSync(outside, 'utf8'), 'outside sentinel');
+    assert.strictEqual(fs.lstatSync(destination).isSymbolicLink(), true);
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
 test('fails closed when the project memory gitignore is preseeded with unsafe rules', () => {
   const fixture = createFixture();
   try {
@@ -322,6 +364,48 @@ test('rejects a vault path that traverses a symlink before creating directories'
       /symlink/i
     );
     assert.strictEqual(fs.existsSync(path.join(outside, 'memory')), false);
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('rejects a symlinked ancestor when roots come back from initializeVault', () => {
+  const fixture = createFixture();
+  const outside = path.join(fixture.root, 'outside');
+  fs.mkdirSync(outside);
+  try {
+    const initialized = initializeVault({ roots: fixture.roots, scopes: ['project'] });
+    fs.rmSync(path.join(fixture.projectRoot, '.ecc'), { recursive: true, force: true });
+    fs.symlinkSync(outside, path.join(fixture.projectRoot, '.ecc'));
+
+    assert.throws(
+      () => saveMemory(
+        { title: 'Escaped note', body: 'must stay in the project' },
+        { ...fixedOptions(fixture.roots), roots: initialized.roots }
+      ),
+      /symlink|outside|trusted/i
+    );
+    assert.strictEqual(fs.existsSync(path.join(outside, 'memory')), false);
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test('fails closed when callers provide roots without a boundary policy', () => {
+  const fixture = createFixture();
+  try {
+    const rootsWithoutPolicy = {
+      project: fixture.roots.project,
+      team: fixture.roots.team,
+      user: fixture.roots.user,
+    };
+    assert.throws(
+      () => saveMemory(
+        { title: 'Untrusted roots', body: 'must not be written' },
+        fixedOptions(rootsWithoutPolicy)
+      ),
+      /boundary policy|trusted boundary/i
+    );
   } finally {
     fs.rmSync(fixture.root, { recursive: true, force: true });
   }
@@ -443,6 +527,20 @@ test('opens regular text files without following a stable symlink', () => {
     assert.throws(
       () => readRegularTextFile(link, { maxBytes: 16 }),
       /non-symlink|symbolic link|symlink/i
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rejects malformed UTF-8 instead of altering durable text', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ecc-memory-utf8-'));
+  const target = path.join(root, 'invalid.md');
+  try {
+    fs.writeFileSync(target, Buffer.from([0x61, 0xc3, 0x28, 0x62]));
+    assert.throws(
+      () => readRegularTextFile(target, { maxBytes: 16 }),
+      /valid UTF-8/i
     );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -683,7 +781,7 @@ test('doctor caps traversal before an oversized directory can dominate recall', 
   const notes = path.join(fixture.roots.project, 'notes');
   try {
     fs.mkdirSync(notes, { recursive: true });
-    for (let index = 0; index < 5001; index += 1) {
+    for (let index = 0; index < MAX_FILES + 1; index += 1) {
       fs.writeFileSync(path.join(notes, `noise-${index}.txt`), '');
     }
     const report = doctorMemoryVault({
@@ -702,14 +800,16 @@ test('doctor caps hostile diagnostics and reports total counts', () => {
   const notes = path.join(fixture.roots.project, 'notes');
   try {
     fs.mkdirSync(notes, { recursive: true });
-    for (let index = 0; index < 120; index += 1) {
+    const invalidFileTotal = MAX_DIAGNOSTICS + 20;
+    for (let index = 0; index < invalidFileTotal; index += 1) {
       fs.writeFileSync(path.join(notes, `malformed-${index}.md`), 'not memory');
     }
     const missingLinks = Array.from(
       { length: 64 },
       (_, index) => `mem_missing_${String(index).padStart(3, '0')}`
     );
-    for (let index = 0; index < 2; index += 1) {
+    const linkDocumentCount = Math.ceil((MAX_DIAGNOSTICS + 1) / missingLinks.length);
+    for (let index = 0; index < linkDocumentCount; index += 1) {
       fs.writeFileSync(
         path.join(notes, `links-${index}.md`),
         serializeMemoryDocument(baseMemory({
@@ -724,10 +824,10 @@ test('doctor caps hostile diagnostics and reports total counts', () => {
       roots: fixture.roots,
       scopes: ['project'],
     });
-    assert.strictEqual(report.invalidFileCount, 120);
-    assert.strictEqual(report.invalidFiles.length, 100);
-    assert.strictEqual(report.brokenLinkCount, 128);
-    assert.strictEqual(report.brokenLinks.length, 100);
+    assert.strictEqual(report.invalidFileCount, invalidFileTotal);
+    assert.strictEqual(report.invalidFiles.length, MAX_DIAGNOSTICS);
+    assert.strictEqual(report.brokenLinkCount, linkDocumentCount * missingLinks.length);
+    assert.strictEqual(report.brokenLinks.length, MAX_DIAGNOSTICS);
     assert.strictEqual(report.diagnosticsTruncated, true);
   } finally {
     fs.rmSync(fixture.root, { recursive: true, force: true });
@@ -739,7 +839,9 @@ test('doctor enforces one aggregate scan-byte budget across a request', () => {
   const notes = path.join(fixture.roots.project, 'notes');
   try {
     fs.mkdirSync(notes, { recursive: true });
-    for (let index = 0; index < 270; index += 1) {
+    const bodyBytes = 63 * 1024;
+    const fileTotal = Math.ceil(MAX_SCAN_BYTES / bodyBytes) + 2;
+    for (let index = 0; index < fileTotal; index += 1) {
       const id = `mem_scan_${String(index).padStart(4, '0')}`;
       fs.writeFileSync(
         path.join(notes, `${id}.md`),
@@ -747,7 +849,7 @@ test('doctor enforces one aggregate scan-byte budget across a request', () => {
           id,
           kind: 'note',
           links: [],
-          body: 'x'.repeat(63 * 1024),
+          body: 'x'.repeat(bodyBytes),
         }))
       );
     }
@@ -756,8 +858,8 @@ test('doctor enforces one aggregate scan-byte budget across a request', () => {
       scopes: ['project'],
     });
     assert.strictEqual(report.truncated, true);
-    assert.ok(report.scannedBytes <= 16 * 1024 * 1024);
-    assert.ok(report.memoryCount < 270);
+    assert.ok(report.scannedBytes <= MAX_SCAN_BYTES);
+    assert.ok(report.memoryCount < fileTotal);
   } finally {
     fs.rmSync(fixture.root, { recursive: true, force: true });
   }

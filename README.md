@@ -293,6 +293,16 @@ team scopes live under `.ecc/memory/`; user scope lives under
 use the team scope only for human-inspected, version-controlled sharing. Team
 memories remain unreviewed context even after they are committed.
 
+Skill-only, minimal, manual, and Claude plugin installs do not put the Memory
+Vault runtime on `PATH`. Install the npm runtime separately before using the CLI
+or optional MCP server:
+
+```bash
+npm install -g ecc-universal
+ecc memory --help
+command -v ecc-memory-mcp
+```
+
 ```bash
 # Initialize the project vault.
 ecc memory init --scope project

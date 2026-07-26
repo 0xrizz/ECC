@@ -103,5 +103,12 @@ test('rejects terminal and bidirectional control characters', () => {
   assertRejected(representativeMemory({ body: ' \n\t' }), 'pattern');
 });
 
+test('accepts newlines, tabs, and carriage returns inside a non-empty Markdown body', () => {
+  const memory = representativeMemory({
+    body: 'Line one\n\n- item\twith tab\r\nLine two',
+  });
+  assert.strictEqual(validateMemory(memory), true, JSON.stringify(validateMemory.errors));
+});
+
 console.log(`\n${passed} passed, ${failed} failed\n`);
 process.exit(failed > 0 ? 1 : 0);

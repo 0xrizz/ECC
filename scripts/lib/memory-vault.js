@@ -5,7 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { assertWithinTrustedRoot } = require('./path-safety');
+const { assertWithinTrustedRoot, realpathNearestExisting } = require('./path-safety');
 const {
   MAX_BODY_BYTES,
   MAX_DOCUMENT_BYTES,
@@ -15,6 +15,7 @@ const {
   MEMORY_STATUSES,
   MEMORY_TRUST_STATES,
   asNonEmptyString,
+  decodeUtf8,
   findPotentialSecrets,
   hasUnsafeControlCharacters,
   normalizeMemory,
@@ -35,7 +36,7 @@ const MAX_QUERY_CHARS = 500;
 const MAX_RESULTS = 100;
 const PROJECT_MEMORY_GITIGNORE = '*\n!.gitignore\n';
 
-const VAULT_ROOT_POLICIES = new WeakMap();
+const VAULT_ROOT_BOUNDARIES = Symbol('vaultRootBoundaries');
 
 function findNearestProjectRoot(cwd) {
   let current = path.resolve(cwd);
@@ -74,23 +75,38 @@ function resolveVaultRoots(options = {}) {
     team: path.join(projectVault, 'team'),
     user: userVault,
   };
-  VAULT_ROOT_POLICIES.set(roots, {
-    project: env.ECC_MEMORY_PROJECT_ROOT ? null : projectRoot,
-    team: env.ECC_MEMORY_PROJECT_ROOT ? null : projectRoot,
-    user: env.ECC_MEMORY_USER_ROOT ? null : homeDir,
+  Object.defineProperty(roots, VAULT_ROOT_BOUNDARIES, {
+    value: Object.freeze({
+      project: env.ECC_MEMORY_PROJECT_ROOT
+        ? realpathNearestExisting(projectVault)
+        : projectRoot,
+      team: env.ECC_MEMORY_PROJECT_ROOT
+        ? realpathNearestExisting(projectVault)
+        : projectRoot,
+      user: env.ECC_MEMORY_USER_ROOT
+        ? realpathNearestExisting(userVault)
+        : homeDir,
+    }),
+    enumerable: false,
+    configurable: false,
+    writable: false,
   });
-  return roots;
+  return Object.freeze(roots);
 }
 
 function assertMemoryRootSafe(roots, scope) {
+  if (!roots || typeof roots !== 'object' || Array.isArray(roots)) {
+    throw new Error('Memory roots must include a trusted boundary policy.');
+  }
   const root = roots[scope];
   if (typeof root !== 'string' || root.length === 0) {
     throw new Error(`No memory root is configured for scope "${scope}".`);
   }
-  const boundary = VAULT_ROOT_POLICIES.get(roots)?.[scope];
-  if (boundary) {
-    assertWithinTrustedRoot(root, boundary, 'access memory through a symlink');
+  const boundary = roots[VAULT_ROOT_BOUNDARIES]?.[scope];
+  if (typeof boundary !== 'string' || boundary.length === 0) {
+    throw new Error(`No trusted boundary policy is configured for memory scope "${scope}".`);
   }
+  assertWithinTrustedRoot(root, boundary, 'access memory through a symlink');
   if (fs.existsSync(root) && fs.lstatSync(root).isSymbolicLink()) {
     throw new Error(`Refusing to access memory through symlink root: ${root}`);
   }
@@ -152,7 +168,7 @@ function readRegularTextFile(filePath, options = {}) {
     if (total > maxBytes) {
       throw new Error(`${label} is too large (maximum ${maxBytes} bytes).`);
     }
-    return Buffer.concat(chunks, total).toString('utf8');
+    return decodeUtf8(Buffer.concat(chunks, total), label);
   } finally {
     fs.closeSync(descriptor);
   }
@@ -254,7 +270,7 @@ function initializeVault(options = {}) {
       return directory;
     });
   });
-  return { scopes, roots: { ...roots }, directories };
+  return { scopes, roots, directories };
 }
 
 function defaultMemoryId(now = new Date()) {
@@ -646,6 +662,11 @@ function readMemoryById(id, options = {}) {
     .filter(entry => entry.memory.links.includes(memoryId))
     .filter(entry => entry.memory.status === 'active')
     .map(entry => entry.memory)
+    .filter(memory => (
+      !targetHarness
+      || memory.targetHarnesses.includes('all')
+      || memory.targetHarnesses.includes(targetHarness)
+    ))
     .sort((left, right) => left.id.localeCompare(right.id));
   const backlinks = allBacklinks
     .slice(0, MAX_RESULTS)
@@ -695,7 +716,7 @@ function doctorMemoryVault(options = {}) {
       }
     }
   }
-  const brokenLinks = allBrokenLinks
+  const brokenLinks = [...allBrokenLinks]
     .sort((left, right) => left.sourceId.localeCompare(right.sourceId));
   const ok = loaded.invalidFileCount === 0
     && allDuplicateIds.length === 0
@@ -726,15 +747,19 @@ function doctorMemoryVault(options = {}) {
 module.exports = {
   DEFAULT_RECALL_SCOPES,
   MAX_BODY_BYTES,
+  MAX_DIAGNOSTICS,
   MAX_DOCUMENT_BYTES,
+  MAX_FILES,
   MAX_QUERY_CHARS,
   MAX_RESULTS,
+  MAX_SCAN_BYTES,
   MEMORY_KINDS,
   MEMORY_SCHEMA_VERSION,
   MEMORY_SCOPES,
   MEMORY_STATUSES,
   MEMORY_TRUST_STATES,
   defaultMemoryId,
+  decodeUtf8,
   doctorMemoryVault,
   findPotentialSecrets,
   findNearestProjectRoot,

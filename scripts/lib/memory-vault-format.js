@@ -1,5 +1,7 @@
 'use strict';
 
+const { TextDecoder } = require('util');
+
 const MEMORY_SCHEMA_VERSION = 'ecc.memory.v1';
 const MEMORY_KINDS = Object.freeze([
   'context',
@@ -42,6 +44,7 @@ const FRONTMATTER_FIELDS = Object.freeze([
   ['updated_at', 'updatedAt'],
 ]);
 const FRONTMATTER_KEYS = new Map(FRONTMATTER_FIELDS);
+const FATAL_UTF8_DECODER = new TextDecoder('utf-8', { fatal: true });
 
 const SECRET_PATTERNS = Object.freeze([
   { label: 'provider API key', pattern: /\bsk-[A-Za-z0-9_-]{16,}\b/i },
@@ -208,6 +211,14 @@ function serializeMemoryDocument(memory) {
   return `---\n${metadata}\n---${body}\n`;
 }
 
+function decodeUtf8(buffer, label = 'text') {
+  try {
+    return FATAL_UTF8_DECODER.decode(buffer);
+  } catch {
+    throw new Error(`${label} must contain valid UTF-8 text.`);
+  }
+}
+
 function parseFrontmatterLine(line, sourcePath, seen) {
   const separator = line.indexOf(':');
   if (separator <= 0) {
@@ -230,19 +241,24 @@ function parseFrontmatterLine(line, sourcePath, seen) {
 }
 
 function parseMemoryDocument(source, sourcePath = '<memory>') {
-  if (typeof source !== 'string' || !source.startsWith('---\n')) {
+  const openingMarker = typeof source === 'string'
+    ? /^---\r?\n/.exec(source)
+    : null;
+  if (!openingMarker) {
     throw new Error(`Memory document ${sourcePath} must start with --- frontmatter.`);
   }
   if (Buffer.byteLength(source, 'utf8') > MAX_DOCUMENT_BYTES) {
     throw new Error(`Memory document ${sourcePath} is too large.`);
   }
 
-  const closingIndex = source.indexOf('\n---', 4);
-  if (closingIndex < 0) {
+  const frontmatterStart = openingMarker[0].length;
+  const remainder = source.slice(frontmatterStart);
+  const closingMarker = /\r?\n---(?=\r?\n|$)/.exec(remainder);
+  if (!closingMarker) {
     throw new Error(`Memory document ${sourcePath} has no closing frontmatter marker.`);
   }
 
-  const frontmatterSource = source.slice(4, closingIndex);
+  const frontmatterSource = remainder.slice(0, closingMarker.index);
   const parsed = frontmatterSource.split(/\r?\n/).reduce((state, line) => {
     const next = parseFrontmatterLine(line, sourcePath, state.seen);
     return {
@@ -258,7 +274,7 @@ function parseMemoryDocument(source, sourcePath = '<memory>') {
     throw new Error(`Memory document ${sourcePath} is missing fields: ${missing.join(', ')}.`);
   }
 
-  const afterMarker = source.slice(closingIndex + 4);
+  const afterMarker = remainder.slice(closingMarker.index + closingMarker[0].length);
   const body = afterMarker.replace(/^\r?\n/, '').replace(/\r?\n$/, '');
   return normalizeMemory({ ...parsed.values, body });
 }
@@ -280,6 +296,7 @@ module.exports = {
   MEMORY_STATUSES,
   MEMORY_TRUST_STATES,
   asNonEmptyString,
+  decodeUtf8,
   findPotentialSecrets,
   hasUnsafeControlCharacters,
   normalizeMemory,

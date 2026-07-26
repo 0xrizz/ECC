@@ -9,6 +9,11 @@ const { PassThrough } = require('stream');
 const { pathToFileURL } = require('url');
 
 const SERVER = path.join(__dirname, '..', '..', 'scripts', 'memory-mcp.mjs');
+const {
+  MAX_RESULTS,
+  resolveVaultRoots,
+  saveMemory,
+} = require('../../scripts/lib/memory-vault');
 
 let passed = 0;
 let failed = 0;
@@ -345,6 +350,51 @@ async function main() {
     });
   });
 
+  await test('filters harness-visible backlinks before applying the response cap', async () => {
+    await withClient(async (client, fixture) => {
+      const roots = resolveVaultRoots({
+        cwd: fixture.projectRoot,
+        env: fixture.env,
+      });
+      const saveWithId = (input, id) => saveMemory(input, {
+        roots,
+        now: () => '2026-07-26T20:00:00.000Z',
+        idFactory: () => id,
+      });
+      const targetId = 'mem_backlink_target';
+      saveWithId({
+        title: 'Backlink target',
+        body: 'Visible target body.',
+        targetHarnesses: ['claude'],
+      }, targetId);
+
+      for (let index = 0; index < MAX_RESULTS; index += 1) {
+        saveWithId({
+          title: `Hidden backlink ${index}`,
+          body: 'Only Hermes may see this backlink.',
+          targetHarnesses: ['hermes'],
+          links: [targetId],
+        }, `mem_backlink_hidden_${String(index).padStart(3, '0')}`);
+      }
+      saveWithId({
+        title: 'Visible backlink',
+        body: 'Claude must still receive this backlink.',
+        targetHarnesses: ['claude'],
+        links: [targetId],
+      }, 'mem_backlink_visible_zzz');
+
+      const read = parseTextResult(await client.callTool({
+        name: 'memory_read',
+        arguments: { id: targetId },
+      }));
+      assert.deepStrictEqual(
+        read.backlinks.map(memory => memory.id),
+        ['mem_backlink_visible_zzz']
+      );
+      assert.strictEqual(read.backlinksTruncated, false);
+    });
+  });
+
   await test('denies user scope unless the server explicitly grants it', async () => {
     await withClient(async client => {
       await assert.rejects(
@@ -429,7 +479,8 @@ async function main() {
         env: fixture.env,
         encoding: 'utf8',
       });
-      assert.notStrictEqual(started.status, 0);
+      assert.strictEqual(started.error, undefined);
+      assert.strictEqual(started.status, 1);
       assert.match(started.stderr, /ECC_MEMORY_HARNESS/);
       assert.ok(!started.stderr.includes('\n    at '));
     } finally {

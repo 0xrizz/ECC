@@ -187,11 +187,6 @@ function assertScopesAuthorized(scopes, security) {
   return requestedScopes;
 }
 
-function isTargetVisible(memory, harness) {
-  return memory.targetHarnesses.includes('all')
-    || memory.targetHarnesses.includes(harness);
-}
-
 function textResult(payload) {
   const text = JSON.stringify(payload, null, 2);
   if (Buffer.byteLength(text, 'utf8') > MAX_RESPONSE_BYTES) {
@@ -307,7 +302,7 @@ function executeMemoryTool(name, rawArguments, options = {}) {
       });
       return textResult({
         memory: read.memory,
-        backlinks: read.backlinks.filter(memory => isTargetVisible(memory, security.harness)),
+        backlinks: read.backlinks,
         backlinksTruncated: read.backlinksTruncated,
       });
     }

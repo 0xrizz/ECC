@@ -54,7 +54,16 @@ Use this as the minimal surface to reproduce the setup without leaking private s
 
 ECC Memory Vault provides one file-first handoff layer instead of a separate
 inbox or transcript store for every agent. Initialize it from the repository
-that the agents share:
+that the agents share. Skill-only, minimal, manual, and Claude plugin installs
+do not add the Memory Vault runtime to `PATH`; install it separately first:
+
+```bash
+npm install -g ecc-universal
+ecc memory --help
+command -v ecc-memory-mcp
+```
+
+Then initialize the vault:
 
 ```bash
 ecc memory init --scope project --scope team
@@ -68,10 +77,12 @@ unreviewed context; human acceptance means promoting verified knowledge into
 governed project documentation.
 
 Hermes can call the CLI directly or use the opt-in `ecc-memory-mcp` stdio
-server. Claude, Codex, Cursor, and OpenCode can connect to the same server or
-use the same CLI. Every harness must launch from the same repository working
-directory or receive identical `ECC_MEMORY_PROJECT_ROOT` and
-`ECC_MEMORY_USER_ROOT` overrides.
+server. Harnesses may share the same installed binary and vault storage, but
+each harness must launch its own server process with its own distinct lowercase
+`ECC_MEMORY_HARNESS` identity; they must not connect to one shared server
+process. Every process must launch from the same repository working directory
+or receive identical `ECC_MEMORY_PROJECT_ROOT` and `ECC_MEMORY_USER_ROOT`
+overrides.
 
 A Hermes-to-Codex handoff can be written without putting the body in the
 process list:

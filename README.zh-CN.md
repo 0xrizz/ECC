@@ -107,6 +107,20 @@ Codex、Hermes 等 harness 之间传递上下文。常规搜索只召回 `projec
 `ECC_MEMORY_ALLOW_USER_SCOPE=1` 后，MCP 调用才能显式请求 `user` 范围。
 该服务默认不会启用。
 
+仅安装 skill、最小配置、手动复制或 Claude 插件不会把记忆库运行时加入
+`PATH`。请先单独安装 ECC npm 运行时：
+
+```bash
+npm install -g ecc-universal
+ecc memory --help
+command -v ecc-memory-mcp
+```
+
+如需启用 MCP，请从 `mcp-configs/mcp-servers.json` 复制
+`ecc-memory-vault` 配置到对应 harness，并为每个 harness 分别启动一个服务
+进程，例如 `ECC_MEMORY_HARNESS=codex ecc-memory-mcp`。不同 harness 可以共享
+同一个二进制文件和记忆库目录，但不能共用同一个服务进程。
+
 ## 快速开始
 
 在 2 分钟内快速上手：
