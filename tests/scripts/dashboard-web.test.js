@@ -125,6 +125,26 @@ test('readFrontmatter parses array tools field', () => {
   cleanup(testRoot);
 });
 
+test('readFrontmatter preserves scoped tools in legacy flow sequences', () => {
+  const { readFrontmatter } = require(SCRIPT);
+  testRoot = createTempDir('ecc-test-');
+  writeFile(testRoot, 'agent.md', [
+    '---',
+    'name: scoped-agent',
+    'tools: [Agent(worker, researcher), Read, Bash(git commit:*, git status:*)]',
+    '---',
+    'body',
+  ].join('\n'));
+
+  const fm = readFrontmatter(path.join(testRoot, 'agent.md'));
+  assert.deepStrictEqual(fm.tools, [
+    'Agent(worker, researcher)',
+    'Read',
+    'Bash(git commit:*, git status:*)',
+  ]);
+  cleanup(testRoot);
+});
+
 test('readFrontmatter normalizes comma-separated scalar tools to an array', () => {
   const { readFrontmatter } = require(SCRIPT);
   testRoot = createTempDir('ecc-test-');
