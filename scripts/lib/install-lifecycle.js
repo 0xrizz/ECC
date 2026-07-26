@@ -329,14 +329,69 @@ function getContainedExistingPath(
   return finalDestination.exists ? finalDestination.managedPath : null;
 }
 
-function writeFileNoFollow(filePath, content, mode) {
+function hasSameFileIdentity(leftStat, rightStat) {
+  return leftStat.dev === rightStat.dev && leftStat.ino === rightStat.ino;
+}
+
+function createChangedDestinationError(action) {
+  return new Error(
+    `Refusing to ${action}: managed destination changed during the write.`
+  );
+}
+
+function getStableParentStat(filePath, action) {
+  const parentStat = fs.lstatSync(path.dirname(filePath));
+  if (!parentStat.isDirectory() || parentStat.isSymbolicLink()) {
+    throw createChangedDestinationError(action);
+  }
+  return parentStat;
+}
+
+function assertPinnedWriteDestination(
+  filePath,
+  fileDescriptor,
+  expectedParentStat,
+  trustedRoot,
+  action
+) {
+  const liveDestination = getManagedDestination(filePath, trustedRoot, action);
+  if (path.resolve(liveDestination.managedPath) !== path.resolve(filePath)) {
+    throw createChangedDestinationError(action);
+  }
+
+  const liveParentStat = getStableParentStat(filePath, action);
+  if (!hasSameFileIdentity(expectedParentStat, liveParentStat)) {
+    throw createChangedDestinationError(action);
+  }
+
+  const descriptorStat = fs.fstatSync(fileDescriptor);
+  const livePathStat = fs.lstatSync(liveDestination.managedPath);
+  if (
+    !descriptorStat.isFile()
+    || !livePathStat.isFile()
+    || livePathStat.isSymbolicLink()
+    || !hasSameFileIdentity(descriptorStat, livePathStat)
+  ) {
+    throw createChangedDestinationError(action);
+  }
+}
+
+function writeFileNoFollow(filePath, content, mode, trustedRoot, action) {
+  const expectedParentStat = getStableParentStat(filePath, action);
   const flags = fs.constants.O_WRONLY
     | fs.constants.O_CREAT
-    | fs.constants.O_TRUNC
     | (fs.constants.O_NOFOLLOW || 0);
   const fileDescriptor = fs.openSync(filePath, flags, mode);
 
   try {
+    assertPinnedWriteDestination(
+      filePath,
+      fileDescriptor,
+      expectedParentStat,
+      trustedRoot,
+      action
+    );
+    fs.ftruncateSync(fileDescriptor, 0);
     fs.writeFileSync(fileDescriptor, content);
     if (mode !== undefined) {
       fs.fchmodSync(fileDescriptor, mode);
@@ -379,7 +434,13 @@ function writeContainedFile(destinationPath, content, trustedRoot, action, mode)
     trustedRoot,
     action
   ).managedPath;
-  writeFileNoFollow(finalDestination, content, mode);
+  writeFileNoFollow(
+    finalDestination,
+    content,
+    mode,
+    trustedRoot,
+    action
+  );
   return finalDestination;
 }
 
@@ -938,6 +999,27 @@ function getUnsafeManagedDestinationError(operationHealth) {
   return 'Refusing unsafe managed destination outside adapter-derived install root.';
 }
 
+function getUnsafeOperationResult(record, operationHealth) {
+  const error = operationHealth.unsafeDestination.length > 0
+    ? getUnsafeManagedDestinationError(operationHealth)
+    : operationHealth.unsafeSource.length > 0
+      ? createUnsafeRepairSourceError().message
+      : null;
+  if (!error) {
+    return null;
+  }
+
+  return {
+    adapter: record.adapter,
+    status: 'error',
+    installStatePath: record.installStatePath,
+    repairedPaths: [],
+    plannedRepairs: [],
+    stateRefreshed: false,
+    error
+  };
+}
+
 function buildDiscoveryRecord(adapter, context) {
   const installTargetInput = {
     homeDir: context.homeDir,
@@ -1346,27 +1428,12 @@ function repairInstalledStates(options = {}) {
           record.targetRoot,
           desiredPlan.operations
         );
-        if (operationHealth.unsafeDestination.length > 0) {
-          return {
-            adapter: record.adapter,
-            status: 'error',
-            installStatePath: record.installStatePath,
-            repairedPaths: [],
-            plannedRepairs: [],
-            stateRefreshed: false,
-            error: getUnsafeManagedDestinationError(operationHealth)
-          };
-        }
-        if (operationHealth.unsafeSource.length > 0) {
-          return {
-            adapter: record.adapter,
-            status: 'error',
-            installStatePath: record.installStatePath,
-            repairedPaths: [],
-            plannedRepairs: [],
-            stateRefreshed: false,
-            error: createUnsafeRepairSourceError().message
-          };
+        const unsafeOperationResult = getUnsafeOperationResult(
+          record,
+          operationHealth
+        );
+        if (unsafeOperationResult) {
+          return unsafeOperationResult;
         }
         const repairOperations = [...operationHealth.missing.map(entry => ({ ...entry.operation })), ...operationHealth.drifted.map(entry => ({ ...entry.operation }))];
         const plannedRepairs = [opencodeBuildRepairPath, ...repairOperations.map(operation => operation.destinationPath)];
@@ -1404,28 +1471,12 @@ function repairInstalledStates(options = {}) {
         desiredPlan.operations
       );
 
-      if (operationHealth.unsafeDestination.length > 0) {
-        return {
-          adapter: record.adapter,
-          status: 'error',
-          installStatePath: record.installStatePath,
-          repairedPaths: [],
-          plannedRepairs: [],
-          stateRefreshed: false,
-          error: getUnsafeManagedDestinationError(operationHealth)
-        };
-      }
-
-      if (operationHealth.unsafeSource.length > 0) {
-        return {
-          adapter: record.adapter,
-          status: 'error',
-          installStatePath: record.installStatePath,
-          repairedPaths: [],
-          plannedRepairs: [],
-          stateRefreshed: false,
-          error: createUnsafeRepairSourceError().message
-        };
+      const unsafeOperationResult = getUnsafeOperationResult(
+        record,
+        operationHealth
+      );
+      if (unsafeOperationResult) {
+        return unsafeOperationResult;
       }
 
       if (operationHealth.missingSource.length > 0) {

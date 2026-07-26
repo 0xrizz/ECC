@@ -15,6 +15,7 @@ let testRoot;
 let testPassed = 0;
 let testFailed = 0;
 const asyncTests = [];
+const REQUEST_TIMEOUT_MS = 5000;
 
 function test(name, fn) {
   try {
@@ -50,7 +51,23 @@ function writeFile(rootDir, relativePath, content) {
 
 function requestDashboard(port, options = {}) {
   return new Promise((resolve, reject) => {
-    const request = http.request({
+    let settled = false;
+    let request;
+    const settle = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      callback(value);
+    };
+    const timeout = setTimeout(() => {
+      const error = new Error(
+        `Dashboard request timed out after ${REQUEST_TIMEOUT_MS}ms`
+      );
+      if (request) request.destroy();
+      settle(reject, error);
+    }, REQUEST_TIMEOUT_MS);
+
+    request = http.request({
       host: '127.0.0.1',
       port,
       method: options.method || 'GET',
@@ -63,15 +80,16 @@ function requestDashboard(port, options = {}) {
       response.on('data', (chunk) => {
         body += chunk;
       });
+      response.on('error', error => settle(reject, error));
       response.on('end', () => {
-        resolve({
+        settle(resolve, {
           body,
           headers: response.headers,
           statusCode: response.statusCode,
         });
       });
     });
-    request.on('error', reject);
+    request.on('error', error => settle(reject, error));
     request.end();
   });
 }
@@ -80,6 +98,21 @@ function requestDashboardWithoutHost(port) {
   return new Promise((resolve, reject) => {
     const socket = net.createConnection({ host: '127.0.0.1', port });
     let raw = '';
+    let settled = false;
+    const settle = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      callback(value);
+    };
+    const timeout = setTimeout(() => {
+      const error = new Error(
+        `Host-less request timed out after ${REQUEST_TIMEOUT_MS}ms`
+      );
+      socket.destroy();
+      settle(reject, error);
+    }, REQUEST_TIMEOUT_MS);
+
     socket.setEncoding('utf8');
     socket.on('connect', () => {
       socket.write('GET / HTTP/1.0\r\n\r\n');
@@ -97,15 +130,23 @@ function requestDashboardWithoutHost(port) {
         if (separator < 1) continue;
         headers[line.slice(0, separator).toLowerCase()] = line.slice(separator + 1).trim();
       }
-      resolve({ body, headers, statusCode });
+      settle(resolve, { body, headers, statusCode });
     });
-    socket.on('error', reject);
+    socket.on('error', error => settle(reject, error));
+    socket.on('close', hadError => {
+      if (!hadError && !settled) {
+        settle(reject, new Error('Host-less request closed before completion'));
+      }
+    });
   });
 }
 
-async function withDashboardServer(fn) {
+async function withDashboardServer(fn, serverOptions = {}) {
   const { createDashboardServer } = require(SCRIPT);
-  const testServer = createDashboardServer({ host: '127.0.0.1' });
+  const testServer = createDashboardServer({
+    host: '127.0.0.1',
+    ...serverOptions,
+  });
   await new Promise((resolve, reject) => {
     testServer.once('error', reject);
     testServer.listen(0, '127.0.0.1', () => {
@@ -825,6 +866,89 @@ asyncTest('server returns no-store JSON on GET /api/data', async () => {
     assert.ok(Array.isArray(parsed.rules));
     assert.ok(Array.isArray(parsed.mcps));
     assert.ok(Array.isArray(parsed.hooks));
+  });
+});
+
+asyncTest('server returns a generic no-store 500 for data failures and remains usable', async () => {
+  let loadCount = 0;
+  const loggedErrors = [];
+  const emptyData = {
+    agents: [],
+    skills: [],
+    commands: [],
+    rules: [],
+    mcps: [],
+    hooks: [],
+  };
+
+  await withDashboardServer(async (port) => {
+    const failedResponse = await requestDashboard(port, { path: '/api/data' });
+    assert.strictEqual(failedResponse.statusCode, 500);
+    assert.strictEqual(failedResponse.headers['cache-control'], 'no-store');
+    assert.deepStrictEqual(JSON.parse(failedResponse.body), {
+      error: 'Internal server error',
+    });
+    assert.ok(!failedResponse.body.includes('sensitive loader detail'));
+
+    const followUpResponse = await requestDashboard(port, { path: '/api/data' });
+    assert.strictEqual(followUpResponse.statusCode, 200);
+    assert.deepStrictEqual(JSON.parse(followUpResponse.body), emptyData);
+    assert.strictEqual(loggedErrors.length, 1);
+    assert.strictEqual(loggedErrors[0].error.message, 'sensitive loader detail');
+  }, {
+    loadData: () => {
+      loadCount++;
+      if (loadCount === 1) {
+        throw new Error('sensitive loader detail');
+      }
+      return emptyData;
+    },
+    reportError: (message, error) => {
+      loggedErrors.push({ error, message });
+    },
+  });
+});
+
+asyncTest('server returns a generic no-store 500 for render failures and remains usable', async () => {
+  const { renderHTML } = require(SCRIPT);
+  let renderCount = 0;
+  const loggedErrors = [];
+  const emptyData = {
+    agents: [],
+    skills: [],
+    commands: [],
+    rules: [],
+    mcps: [],
+    hooks: [],
+  };
+
+  await withDashboardServer(async (port) => {
+    const failedResponse = await requestDashboard(port);
+    assert.strictEqual(failedResponse.statusCode, 500);
+    assert.strictEqual(failedResponse.headers['cache-control'], 'no-store');
+    assert.strictEqual(
+      failedResponse.body,
+      '<!DOCTYPE html><p>Dashboard unavailable.</p>'
+    );
+    assert.ok(!failedResponse.body.includes('sensitive render detail'));
+
+    const followUpResponse = await requestDashboard(port);
+    assert.strictEqual(followUpResponse.statusCode, 200);
+    assert.ok(followUpResponse.body.includes('ECC Capabilities'));
+    assert.strictEqual(loggedErrors.length, 1);
+    assert.strictEqual(loggedErrors[0].error.message, 'sensitive render detail');
+  }, {
+    loadData: () => emptyData,
+    render: (data) => {
+      renderCount++;
+      if (renderCount === 1) {
+        throw new Error('sensitive render detail');
+      }
+      return renderHTML(data);
+    },
+    reportError: (message, error) => {
+      loggedErrors.push({ error, message });
+    },
   });
 });
 

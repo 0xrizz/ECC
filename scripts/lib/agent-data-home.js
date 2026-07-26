@@ -98,8 +98,8 @@ function getDefaultClaudeAgentDataHome() {
 function warnUnsafeProjectConfig() {
   console.error(
     '[ECC] Ignoring unsafe agent data project config: agentDataHome must stay ' +
-    'within the default Cursor data directory. Use ECC_AGENT_DATA_HOME for an ' +
-    'explicit trusted override.'
+    'within the default Cursor or Claude data directories. Use ' +
+    'ECC_AGENT_DATA_HOME for an explicit trusted override.'
   );
 }
 
@@ -108,6 +108,26 @@ function isSafeProjectConfigSyntax(candidate) {
   const isUserAnchored = trimmed.startsWith('~') || path.isAbsolute(trimmed);
   const hasParentTraversal = trimmed.split(/[/\\]+/).includes('..');
   return isUserAnchored && !hasParentTraversal;
+}
+
+function resolveAllowedProjectConfigHome(candidate) {
+  const allowedRoots = [
+    getDefaultCursorAgentDataHome(),
+    getDefaultClaudeAgentDataHome(),
+  ];
+
+  for (const allowedRoot of allowedRoots) {
+    try {
+      return assertWithinTrustedRoot(
+        candidate,
+        allowedRoot,
+        'use project agent data home'
+      );
+    } catch {
+      // Try the next explicitly allowed default root.
+    }
+  }
+  return null;
 }
 
 function readProjectConfigAt(configPath) {
@@ -125,16 +145,12 @@ function readProjectConfigAt(configPath) {
     }
     const projectRoot = resolveProjectRootFromConfigPath(configPath);
     const resolved = expandHomePath(candidate, projectRoot);
-    try {
-      return assertWithinTrustedRoot(
-        resolved,
-        getDefaultCursorAgentDataHome(),
-        'use project agent data home'
-      );
-    } catch {
+    const allowedHome = resolveAllowedProjectConfigHome(resolved);
+    if (!allowedHome) {
       warnUnsafeProjectConfig();
       return null;
     }
+    return allowedHome;
   } catch (error) {
     console.error(
       `[ECC] Failed to read or parse agent data config at ${configPath}: ${error.message}`

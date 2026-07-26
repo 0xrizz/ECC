@@ -1619,6 +1619,7 @@ function runTests() {
 
   if (test('repair uses no-follow writes when a final destination becomes a symlink', () => {
     if (!fs.constants.O_NOFOLLOW) {
+      console.log('    (O_NOFOLLOW unsupported on this platform; skipping)');
       return;
     }
 
@@ -1677,6 +1678,92 @@ function runTests() {
     }
   })) passed++; else failed++;
 
+  if (test('repair revalidates a pinned write before a swapped parent can truncate outside files', () => {
+    const homeDir = createTempDir('install-lifecycle-home-');
+    const projectRoot = createTempDir('install-lifecycle-project-');
+    const outsideRoot = createTempDir('install-lifecycle-outside-');
+    const targetRoot = path.join(projectRoot, '.cursor');
+    const destinationParent = path.join(targetRoot, 'late-parent');
+    const backupParent = path.join(targetRoot, 'late-parent-backup');
+    const destinationPath = path.join(destinationParent, 'managed.md');
+    const outsideDestinationPath = path.join(outsideRoot, 'managed.md');
+    const originalOpenSync = fs.openSync;
+    let canonicalDestinationPath;
+    let insertedSymlink = false;
+    let result;
+
+    const symlinkProbe = path.join(targetRoot, 'parent-symlink-probe');
+    try {
+      fs.mkdirSync(targetRoot, { recursive: true });
+      fs.symlinkSync(
+        outsideRoot,
+        symlinkProbe,
+        process.platform === 'win32' ? 'junction' : 'dir'
+      );
+      fs.rmSync(symlinkProbe, { force: true });
+    } catch {
+      console.log('    (symlink unsupported on this platform; skipping)');
+      cleanup(homeDir);
+      cleanup(projectRoot);
+      cleanup(outsideRoot);
+      return;
+    }
+
+    try {
+      fs.mkdirSync(destinationParent, { recursive: true });
+      fs.writeFileSync(destinationPath, 'drifted managed content\n');
+      fs.writeFileSync(outsideDestinationPath, 'outside sentinel\n');
+      canonicalDestinationPath = fs.realpathSync(destinationPath);
+      writeCursorState(projectRoot, {
+        operations: [
+          managedOperation('copy-file', destinationPath, { strategy: 'copy-file' }),
+        ],
+      });
+
+      fs.openSync = function openSyncWithLateParentSwap(filePath, flags, mode) {
+        const isDestinationWrite = path.resolve(filePath) === canonicalDestinationPath
+          && typeof flags === 'number'
+          && (flags & fs.constants.O_WRONLY) === fs.constants.O_WRONLY;
+        if (!insertedSymlink && isDestinationWrite) {
+          fs.renameSync(destinationParent, backupParent);
+          fs.symlinkSync(
+            outsideRoot,
+            destinationParent,
+            process.platform === 'win32' ? 'junction' : 'dir'
+          );
+          insertedSymlink = true;
+        }
+        return originalOpenSync.call(fs, filePath, flags, mode);
+      };
+
+      result = repairInstalledStates({
+        repoRoot: REPO_ROOT,
+        homeDir,
+        projectRoot,
+        targets: ['cursor'],
+      });
+    } finally {
+      fs.openSync = originalOpenSync;
+    }
+
+    try {
+      assert.strictEqual(insertedSymlink, true);
+      assert.strictEqual(result.results[0].status, 'error');
+      assert.strictEqual(
+        fs.readFileSync(outsideDestinationPath, 'utf8'),
+        'outside sentinel\n'
+      );
+      assert.strictEqual(
+        fs.readFileSync(path.join(backupParent, 'managed.md'), 'utf8'),
+        'drifted managed content\n'
+      );
+    } finally {
+      cleanup(homeDir);
+      cleanup(projectRoot);
+      cleanup(outsideRoot);
+    }
+  })) passed++; else failed++;
+
   if (test('repair refreshes only the adapter-derived install-state path', () => {
     const homeDir = createTempDir('install-lifecycle-home-');
     const projectRoot = createTempDir('install-lifecycle-project-');
@@ -1690,6 +1777,7 @@ function runTests() {
         installStatePath: recordedStatePath,
       });
       writeState(adapterStatePath, stateOptions);
+      fs.writeFileSync(recordedStatePath, 'outside sentinel\n');
 
       const result = repairInstalledStates({
         repoRoot: REPO_ROOT,
@@ -1700,7 +1788,10 @@ function runTests() {
 
       assert.strictEqual(result.results[0].status, 'ok');
       assert.ok(fs.existsSync(adapterStatePath));
-      assert.ok(!fs.existsSync(recordedStatePath));
+      assert.strictEqual(
+        fs.readFileSync(recordedStatePath, 'utf8'),
+        'outside sentinel\n'
+      );
       const refreshedState = readInstallState(adapterStatePath);
       assert.strictEqual(refreshedState.target.root, targetRoot);
       assert.strictEqual(refreshedState.target.installStatePath, adapterStatePath);

@@ -834,7 +834,25 @@ function loadDashboardData(root) {
   };
 }
 
-function createDashboardServer({ root = ROOT, host = HOST } = {}) {
+function defaultReportError(message, error) {
+  console.error(message, error);
+}
+
+function reportDashboardFailure(reportError, message, error) {
+  try {
+    reportError(message, error);
+  } catch {
+    // Error reporting must never prevent the generic HTTP response.
+  }
+}
+
+function createDashboardServer({
+  root = ROOT,
+  host = HOST,
+  loadData = loadDashboardData,
+  render = renderHTML,
+  reportError = defaultReportError,
+} = {}) {
   const resolvedHost = resolveDashboardHost({ ECC_DASHBOARD_HOST: host });
   const allowedHostnames = buildAllowedHostnames(resolvedHost);
 
@@ -854,9 +872,36 @@ function createDashboardServer({ root = ROOT, host = HOST } = {}) {
     }
 
     if (url.pathname === '/api/data') {
-      return sendJson(res, 200, loadDashboardData(root));
+      let data;
+      try {
+        data = loadData(root);
+      } catch (error) {
+        reportDashboardFailure(
+          reportError,
+          '[ECC] Failed to load dashboard data:',
+          error
+        );
+        return sendJson(res, 500, { error: 'Internal server error' });
+      }
+      return sendJson(res, 200, data);
     }
-    return sendHtml(res, 200, renderHTML(loadDashboardData(root)));
+
+    let html;
+    try {
+      html = render(loadData(root));
+    } catch (error) {
+      reportDashboardFailure(
+        reportError,
+        '[ECC] Failed to render dashboard:',
+        error
+      );
+      return sendHtml(
+        res,
+        500,
+        '<!DOCTYPE html><p>Dashboard unavailable.</p>'
+      );
+    }
+    return sendHtml(res, 200, html);
   });
 }
 
