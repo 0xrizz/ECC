@@ -334,6 +334,24 @@ function runTests() {
     assert.ok(result.stdout.includes('Validated'), 'Should output validation count');
   })) passed++; else failed++;
 
+  if (test('canonical agents declare tools as comma-separated scalars', () => {
+    const agentsDir = path.join(__dirname, '..', '..', 'agents');
+    const agentFiles = fs.readdirSync(agentsDir).filter(file => file.endsWith('.md'));
+
+    for (const file of agentFiles) {
+      const content = fs.readFileSync(path.join(agentsDir, file), 'utf8');
+      const frontmatter = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+      assert.ok(frontmatter, `${file} should have frontmatter`);
+
+      const toolsLine = frontmatter[1].match(/^tools:\s*(.+)$/m);
+      assert.ok(toolsLine, `${file} should declare a non-empty tools scalar`);
+      assert.ok(
+        !toolsLine[1].trim().startsWith('['),
+        `${file} should use comma-separated scalar tools, not a YAML sequence`
+      );
+    }
+  })) passed++; else failed++;
+
   if (test('fails on agent without frontmatter', () => {
     const testDir = createTestDir();
     fs.writeFileSync(path.join(testDir, 'bad-agent.md'), '# No frontmatter here\nJust content.');
@@ -371,6 +389,54 @@ function runTests() {
     const result = runValidatorWithDir('validate-agents', 'AGENTS_DIR', testDir);
     assert.strictEqual(result.code, 0, 'Should pass for valid agent');
     assert.ok(result.stdout.includes('Validated 1'), 'Should report 1 validated');
+    cleanupTestDir(testDir);
+  })) passed++; else failed++;
+
+  if (test('accepts comma-separated scalar agent tools', () => {
+    const testDir = createTestDir();
+    fs.writeFileSync(path.join(testDir, 'scalar-tools.md'), '---\nmodel: sonnet\ntools: Read, Glob, Grep\n---\n# Agent');
+
+    const result = runValidatorWithDir('validate-agents', 'AGENTS_DIR', testDir);
+    assert.strictEqual(result.code, 0, `Should accept scalar tools, got stderr: ${result.stderr}`);
+    cleanupTestDir(testDir);
+  })) passed++; else failed++;
+
+  if (test('rejects YAML sequence-form agent tools', () => {
+    const testDir = createTestDir();
+    fs.writeFileSync(path.join(testDir, 'sequence-tools.md'), '---\nmodel: sonnet\ntools: [Read, Glob, Grep]\n---\n# Agent');
+
+    const result = runValidatorWithDir('validate-agents', 'AGENTS_DIR', testDir);
+    assert.strictEqual(result.code, 1, 'Should reject sequence-form tools');
+    assert.ok(
+      result.stderr.includes('comma-separated scalar'),
+      `Should explain the supported tools format, got stderr: ${result.stderr}`
+    );
+    cleanupTestDir(testDir);
+  })) passed++; else failed++;
+
+  if (test('rejects block sequence-form agent tools', () => {
+    const testDir = createTestDir();
+    fs.writeFileSync(path.join(testDir, 'block-sequence-tools.md'), '---\nmodel: sonnet\ntools:\n  - Read\n  - Glob\n  - Grep\n---\n# Agent');
+
+    const result = runValidatorWithDir('validate-agents', 'AGENTS_DIR', testDir);
+    assert.strictEqual(result.code, 1, 'Should reject block sequence-form tools');
+    assert.ok(
+      result.stderr.includes('comma-separated scalar'),
+      `Should explain the supported tools format, got stderr: ${result.stderr}`
+    );
+    cleanupTestDir(testDir);
+  })) passed++; else failed++;
+
+  if (test('rejects explicitly tagged YAML sequence-form agent tools', () => {
+    const testDir = createTestDir();
+    fs.writeFileSync(path.join(testDir, 'tagged-sequence-tools.md'), '---\nmodel: sonnet\ntools: !!seq [Read, Glob, Grep]\n---\n# Agent');
+
+    const result = runValidatorWithDir('validate-agents', 'AGENTS_DIR', testDir);
+    assert.strictEqual(result.code, 1, 'Should reject tagged sequence-form tools');
+    assert.ok(
+      result.stderr.includes('comma-separated scalar'),
+      `Should explain the supported tools format, got stderr: ${result.stderr}`
+    );
     cleanupTestDir(testDir);
   })) passed++; else failed++;
 

@@ -125,6 +125,23 @@ test('readFrontmatter parses array tools field', () => {
   cleanup(testRoot);
 });
 
+test('readFrontmatter normalizes comma-separated scalar tools to an array', () => {
+  const { readFrontmatter } = require(SCRIPT);
+  testRoot = createTempDir('ecc-test-');
+  writeFile(testRoot, 'agent.md', [
+    '---',
+    'name: test-agent',
+    'tools: Bash, Read, Write',
+    '---',
+    '# Body',
+  ].join('\n'));
+
+  const fm = readFrontmatter(path.join(testRoot, 'agent.md'));
+  assert.ok(Array.isArray(fm.tools));
+  assert.deepStrictEqual(fm.tools, ['Bash', 'Read', 'Write']);
+  cleanup(testRoot);
+});
+
 test('readFrontmatter handles quoted values', () => {
   const { readFrontmatter } = require(SCRIPT);
   testRoot = createTempDir('ecc-test-');
@@ -202,7 +219,7 @@ test('loadAgents loads agent markdown files', () => {
     'name: typescript-reviewer',
     'description: Reviews TypeScript code',
     'model: claude-sonnet-4-6',
-    'tools: [Bash, Read, Write, Grep]',
+    'tools: Bash, Read, Write, Grep',
     '---',
     '# TypeScript Reviewer',
     'You are a TypeScript code reviewer.',
@@ -212,7 +229,7 @@ test('loadAgents loads agent markdown files', () => {
     'name: python-reviewer',
     'description: Reviews Python code',
     'model: claude-opus-4-8',
-    'tools: [Bash, Read]',
+    'tools: Bash, Read',
     '---',
     '# Python Reviewer',
   ].join('\n'));
