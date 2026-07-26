@@ -275,7 +275,7 @@
     {
       "id": "workflow-quality",
       "kind": "skills",
-      "description": "Evaluation, TDD, verification, compaction, and learning skills, including the legacy continuous-learning v1 path.",
+      "description": "Evaluation, TDD, verification, compaction, learning, and cross-harness memory skills, including the legacy continuous-learning v1 path.",
       "paths": [
         "skills/agent-sort",
         "skills/agent-introspection-debugging",
@@ -297,6 +297,7 @@
         "skills/skill-stocktake",
         "skills/strategic-compact",
         "skills/tdd-workflow",
+        "skills/unified-memory",
         "skills/verification-loop",
         "skills/windows-desktop-e2e",
         "skills/agent-self-evaluation",

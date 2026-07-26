@@ -44,7 +44,7 @@
     {
       "id": "baseline:workflow",
       "family": "baseline",
-      "description": "Evaluation, TDD, verification, and compaction workflow support.",
+      "description": "Evaluation, TDD, verification, compaction, learning, and cross-harness memory workflow support.",
       "modules": [
         "workflow-quality"
       ]
