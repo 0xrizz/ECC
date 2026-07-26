@@ -56,6 +56,8 @@ function runTests() {
     const skill = read('skills/hookify-rules/SKILL.md');
 
     assert.ok(help.includes('simple `pattern` matches `file_path`'));
+    assert.ok(help.includes('`regex_match` is case-insensitive'));
+    assert.ok(help.includes('literal operators are case-sensitive'));
     assert.ok(skill.includes('Simple `event: file` patterns match `file_path`'));
     assert.ok(skill.includes('changed content requires explicit conditions'));
   })) passed++; else failed++;

@@ -126,7 +126,7 @@ the warning to stderr.
 
 ### Pattern Tips
 
-- use JavaScript regex syntax; matching is case-insensitive
+- use JavaScript regex syntax; `regex_match` is case-insensitive while literal operators are case-sensitive
 - for `bash`, match against the full command string
 - for `file`, a simple pattern matches the full file path
 - for changed text, use a `content`, `new_text`, or `old_text` condition
