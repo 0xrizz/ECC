@@ -191,6 +191,105 @@ function runTests() {
     assert.strictEqual(JSON.stringify(input), snapshot);
   })) passed++; else failed++;
 
+  if (test('blocking rules inspect complete accepted fields beyond the old 64 KiB boundary', () => {
+    const sentinel = 'HOOKIFY_BLOCK_AFTER_64_KIB';
+    const longPrefix = 'x'.repeat(70 * 1024);
+    const cases = [
+      {
+        field: 'command',
+        input: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'Bash',
+          tool_input: { command: `${longPrefix}${sentinel}` },
+        },
+      },
+      {
+        field: 'content',
+        input: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'Write',
+          tool_input: {
+            file_path: '/repo/output.txt',
+            content: `${longPrefix}${sentinel}`,
+          },
+        },
+      },
+      {
+        field: 'user_prompt',
+        input: {
+          hook_event_name: 'UserPromptSubmit',
+          prompt: `${longPrefix}${sentinel}`,
+        },
+      },
+      {
+        field: 'content',
+        input: {
+          hook_event_name: 'Stop',
+          last_assistant_message: `${longPrefix}${sentinel}`,
+        },
+      },
+      {
+        field: 'new_text',
+        input: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'MultiEdit',
+          tool_input: {
+            file_path: '/repo/output.txt',
+            edits: [
+              { old_string: 'before', new_string: longPrefix },
+              { old_string: 'after', new_string: sentinel },
+            ],
+          },
+        },
+      },
+    ];
+
+    for (const { field, input } of cases) {
+      assert.ok(
+        Buffer.byteLength(JSON.stringify(input), 'utf8') < 256 * 1024,
+        `${field} fixture must fit within the accepted hook input`
+      );
+      const blockingRule = rule({
+        action: 'block',
+        conditions: [{ field, operator: 'contains', pattern: sentinel }],
+      });
+      assert.deepStrictEqual(
+        evaluateRules([blockingRule], input).matches.map(item => item.name),
+        ['test-rule'],
+        `${field} must be evaluated through its complete accepted value`
+      );
+    }
+
+    const manyEditsInput = {
+      hook_event_name: 'PreToolUse',
+      tool_name: 'MultiEdit',
+      tool_input: {
+        file_path: '/repo/output.txt',
+        edits: [
+          ...Array.from(
+            { length: 300 },
+            () => ({ old_string: 'before', new_string: 'ordinary edit' })
+          ),
+          { old_string: 'after', new_string: sentinel },
+        ],
+      },
+    };
+    assert.ok(
+      Buffer.byteLength(JSON.stringify(manyEditsInput), 'utf8') < 256 * 1024,
+      'MultiEdit fixture must fit within the accepted hook input'
+    );
+    assert.deepStrictEqual(
+      evaluateRules([
+        rule({
+          action: 'block',
+          conditions: [{ field: 'new_text', operator: 'contains', pattern: sentinel }],
+        }),
+      ], manyEditsInput).matches.map(item => item.name),
+      ['test-rule'],
+      'every edit in an accepted MultiEdit payload must be evaluated'
+    );
+  })) passed++; else failed++;
+
   if (test('fails open with a sanitized diagnostic for invalid regex syntax', () => {
     const input = {
       hook_event_name: 'PreToolUse',
@@ -211,31 +310,45 @@ function runTests() {
     assert.ok(!result.diagnostics[0].message.includes('anything'));
   })) passed++; else failed++;
 
-  if (test('terminates catastrophic regex evaluation at one hard total deadline', () => {
+  if (test('a regex timeout preserves an unrelated literal-only block match', () => {
     const input = {
       hook_event_name: 'PreToolUse',
       tool_name: 'Bash',
-      tool_input: { command: `${'a'.repeat(30000)}!` },
+      tool_input: { command: `literal-hit ${'a'.repeat(30000)}!` },
     };
     const dangerousRules = Array.from({ length: 8 }, (_, index) => rule({
       name: `danger-${index}`,
       source: `hookify.danger-${index}.local.md`,
       conditions: [{ field: 'command', operator: 'regex_match', pattern: '(a+)+$' }],
     }));
+    const literalBlock = rule({
+      name: 'literal-block',
+      action: 'block',
+      conditions: [{ field: 'command', operator: 'contains', pattern: 'literal-hit' }],
+    });
     const startedAt = Date.now();
 
-    const result = evaluateRules(dangerousRules, input, { timeoutMs: 100 });
+    const result = evaluateRules([...dangerousRules, literalBlock], input, { timeoutMs: 100 });
     const elapsed = Date.now() - startedAt;
 
-    assert.deepStrictEqual(result.matches, []);
+    assert.deepStrictEqual(result.matches.map(item => item.name), ['literal-block']);
     assert.ok(result.diagnostics.some(item => item.code === 'HOOKIFY_REGEX_TIMEOUT'));
     assert.ok(elapsed < 1500, `regex worker should be terminated promptly, took ${elapsed}ms`);
   })) passed++; else failed++;
 
   if (test('bounds multibyte fields and handles absent or incompatible field shapes', () => {
-    const longValue = `${'a'.repeat(65535)}界tail`;
+    const acceptedValue = `${'a'.repeat(70 * 1024)}界tail`;
+    const preservedValue = truncateUtf8(acceptedValue);
+    assert.strictEqual(
+      Buffer.byteLength(preservedValue, 'utf8'),
+      Buffer.byteLength(acceptedValue, 'utf8'),
+      'a field within the hook input cap must not be partially evaluated'
+    );
+    assert.ok(preservedValue.endsWith('界tail'));
+
+    const longValue = `${'a'.repeat(256 * 1024 - 1)}界tail`;
     const truncated = truncateUtf8(longValue);
-    assert.ok(Buffer.byteLength(truncated, 'utf8') <= 64 * 1024);
+    assert.ok(Buffer.byteLength(truncated, 'utf8') <= 256 * 1024);
     assert.ok(!truncated.includes('\ufffd'));
 
     assert.strictEqual(extractConditionValue('command', null), null);

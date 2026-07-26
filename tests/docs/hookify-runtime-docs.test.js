@@ -51,6 +51,15 @@ function runTests() {
     }
   })) passed++; else failed++;
 
+  if (test('simple file patterns retain the file-path contract', () => {
+    const help = read('commands/hookify-help.md');
+    const skill = read('skills/hookify-rules/SKILL.md');
+
+    assert.ok(help.includes('simple `pattern` matches `file_path`'));
+    assert.ok(skill.includes('Simple `event: file` patterns match `file_path`'));
+    assert.ok(skill.includes('changed content requires explicit conditions'));
+  })) passed++; else failed++;
+
   if (test('authoring command and skill document the complete supported schema', () => {
     const authoring = read('commands/hookify.md');
     const skill = read('skills/hookify-rules/SKILL.md');

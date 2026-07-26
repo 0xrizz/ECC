@@ -316,6 +316,7 @@ function run(rawInput, context = {}) {
     });
     const evaluated = evaluateRules(loaded.rules, payload, {
       timeoutMs: LIMITS.regexTimeoutMs,
+      maxFieldBytes: LIMITS.maxInputBytes,
     });
     const output = buildOutput(eventName, evaluated.matches, [
       ...loaded.diagnostics,

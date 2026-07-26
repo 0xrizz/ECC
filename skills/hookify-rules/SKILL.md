@@ -40,6 +40,10 @@ Can include markdown formatting, warnings, suggestions, etc.
 | conditions | Yes* | list | All field/operator/pattern entries must match (*use exactly one of pattern or conditions) |
 | tool_matcher | No | `*` or exact names separated by `\|` | Limits a rule to tools such as `Bash` or `Write\|Edit` |
 
+Simple `event: file` patterns match `file_path`.
+Matching changed content requires explicit conditions using `content`,
+`new_text`, or `old_text`.
+
 ### Advanced Format (Multiple Conditions)
 
 ```markdown
@@ -82,10 +86,12 @@ Match Bash command patterns:
 - Permission issues: `chmod\s+777`
 
 ### file Events
-Match Edit/Write/MultiEdit operations:
+Simple patterns match the target path for Edit/Write/MultiEdit/NotebookEdit:
+- Sensitive files: `\.env$`, `credentials`, `\.pem$`
+
+Use explicit `content`, `new_text`, or `old_text` conditions for changed text:
 - Debug code: `console\.log\(`, `debugger`
 - Security risks: `eval\(`, `innerHTML\s*=`
-- Sensitive files: `\.env$`, `credentials`, `\.pem$`
 
 ### stop Events
 Completion checks and reminders against the last assistant message. Pattern

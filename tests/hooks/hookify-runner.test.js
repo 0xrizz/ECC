@@ -141,6 +141,57 @@ function runTests() {
     });
   })) passed++; else failed++;
 
+  if (test('PreToolUse blocks inspect accepted command text beyond 64 KiB', () => {
+    withProject(({ projectRoot, claudeDir }) => {
+      const sentinel = 'HOOKIFY_BLOCK_AFTER_64_KIB';
+      writeRule(claudeDir, {
+        action: 'block',
+        pattern: sentinel,
+        message: 'This late command content is prohibited.',
+      });
+      const payload = {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Bash',
+        tool_input: { command: `${'x'.repeat(70 * 1024)}${sentinel}` },
+      };
+      assert.ok(Buffer.byteLength(JSON.stringify(payload), 'utf8') < LIMITS.maxInputBytes);
+
+      const output = invoke(projectRoot, 'PreToolUse', payload);
+
+      assert.strictEqual(output.hookSpecificOutput.permissionDecision, 'deny');
+      assert.ok(
+        output.hookSpecificOutput.permissionDecisionReason.includes(
+          'This late command content is prohibited.'
+        )
+      );
+    });
+  })) passed++; else failed++;
+
+  if (test('simple file patterns block matching file paths rather than changed content', () => {
+    withProject(({ projectRoot, claudeDir }) => {
+      writeRule(claudeDir, {
+        event: 'file',
+        action: 'block',
+        pattern: '\\.env$',
+        message: 'Environment files are protected.',
+      });
+
+      const blocked = invoke(projectRoot, 'PreToolUse', {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Write',
+        tool_input: { file_path: '/repo/.env', content: 'SAFE=value' },
+      });
+      assert.strictEqual(blocked.hookSpecificOutput.permissionDecision, 'deny');
+
+      const contentOnly = invoke(projectRoot, 'PreToolUse', {
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Write',
+        tool_input: { file_path: '/repo/README.md', content: 'mentions .env' },
+      });
+      assert.deepStrictEqual(contentOnly, {});
+    });
+  })) passed++; else failed++;
+
   if (test('PostToolUse block feedback truthfully says the completed tool is not undone', () => {
     withProject(({ projectRoot, claudeDir }) => {
       writeRule(claudeDir, { action: 'block', message: 'Repair the result.' });

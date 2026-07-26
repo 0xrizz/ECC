@@ -13,8 +13,8 @@ PreToolUse, PostToolUse, UserPromptSubmit, and Stop.
 ### Event Types
 
 - `bash`: runs on Bash tool use; a simple `pattern` matches `command`
-- `file`: runs on Write/Edit/MultiEdit/NotebookEdit; a simple `pattern`
-  matches changed content
+- `file`: runs on Write/Edit/MultiEdit/NotebookEdit;
+  a simple `pattern` matches `file_path`
 - `stop`: runs when Claude finishes a response; a simple `pattern` matches
   the last assistant message
 - `prompt`: runs on user message submission; a simple `pattern` matches the
@@ -100,6 +100,10 @@ non-regular files, unsupported YAML structures, unknown fields, invalid
 operators, and invalid event/field combinations. It does not read `transcript_path`;
 Stop rules use the bounded last assistant message.
 
+Every condition field in an accepted hook input is evaluated completely up to
+the 256 KiB input limit. A regex timeout does not discard independent
+literal-only rule matches.
+
 Limits per invocation:
 
 - 256 directory entries inspected and 64 rule files evaluated
@@ -124,6 +128,7 @@ the warning to stderr.
 
 - use JavaScript regex syntax; matching is case-insensitive
 - for `bash`, match against the full command string
-- for a file path, use a `file_path` condition
+- for `file`, a simple pattern matches the full file path
+- for changed text, use a `content`, `new_text`, or `old_text` condition
 - keep regexes narrow even though worker isolation enforces a hard deadline
 - test patterns before enabling a blocking rule

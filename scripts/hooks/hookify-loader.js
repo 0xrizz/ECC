@@ -210,6 +210,7 @@ function validateToolMatcher(value) {
 
 function inferredField(event) {
   if (event === 'bash') return 'command';
+  if (event === 'file') return 'file_path';
   if (event === 'prompt') return 'user_prompt';
   return 'content';
 }

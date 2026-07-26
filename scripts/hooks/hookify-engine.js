@@ -7,13 +7,16 @@
 
 const path = require('path');
 const { Worker } = require('worker_threads');
+const { evaluateTasks } = require('./hookify-regex-worker');
 
 const WORKER_PATH = path.join(__dirname, 'hookify-regex-worker.js');
 const WORKER_RESULT_BYTES = 64 * 1024;
 const HEADER_BYTES = Int32Array.BYTES_PER_ELEMENT * 2;
 const DEFAULT_TIMEOUT_MS = 250;
-const MAX_FIELD_BYTES = 64 * 1024;
-const MAX_EDIT_ITEMS = 256;
+const MAX_FIELD_BYTES = 256 * 1024;
+// Every JSON array entry consumes at least one input byte. This ceiling keeps
+// direct callers bounded without excluding any payload accepted by the runner.
+const MAX_EDIT_ENTRIES = MAX_FIELD_BYTES;
 
 function truncateUtf8(value, maxBytes = MAX_FIELD_BYTES) {
   const input = String(value);
@@ -25,38 +28,62 @@ function truncateUtf8(value, maxBytes = MAX_FIELD_BYTES) {
   return encoded.subarray(0, end).toString('utf8');
 }
 
-function stringField(value) {
-  return typeof value === 'string' ? truncateUtf8(value) : null;
+function normalizeFieldByteLimit(value) {
+  const requested = Number(value);
+  return Number.isInteger(requested) && requested > 0
+    ? Math.min(requested, MAX_FIELD_BYTES)
+    : MAX_FIELD_BYTES;
 }
 
-function editValues(toolInput, field) {
+function stringField(value, maxBytes) {
+  return typeof value === 'string' ? truncateUtf8(value, maxBytes) : null;
+}
+
+function editValues(toolInput, field, maxBytes) {
   if (!Array.isArray(toolInput.edits)) return null;
-  const values = [];
-  for (const edit of toolInput.edits.slice(0, MAX_EDIT_ITEMS)) {
+  const chunks = [];
+  let acceptedValues = 0;
+  let bytes = 0;
+  let inspectedEntries = 0;
+  for (const edit of toolInput.edits) {
+    if (inspectedEntries >= MAX_EDIT_ENTRIES) break;
+    inspectedEntries += 1;
     if (!edit || typeof edit !== 'object' || Array.isArray(edit)) continue;
-    const value = stringField(edit[field]);
-    if (value !== null) values.push(value);
+    if (typeof edit[field] !== 'string') continue;
+
+    const separatorBytes = acceptedValues > 0 ? 1 : 0;
+    const contentBudget = maxBytes - bytes - separatorBytes;
+    if (contentBudget < 0) break;
+
+    const value = truncateUtf8(edit[field], contentBudget);
+    if (edit[field].length > 0 && value.length === 0 && contentBudget === 0) break;
+    if (separatorBytes > 0) chunks.push('\n');
+    chunks.push(value);
+    acceptedValues += 1;
+    bytes += separatorBytes + Buffer.byteLength(value, 'utf8');
+    if (Buffer.byteLength(edit[field], 'utf8') > contentBudget) break;
   }
-  return truncateUtf8(values.join('\n'));
+  return chunks.join('');
 }
 
-function fileContent(toolName, toolInput) {
+function fileContent(toolName, toolInput, maxBytes) {
   if (toolName === 'MultiEdit') {
-    return editValues(toolInput, 'new_string') || '';
+    return editValues(toolInput, 'new_string', maxBytes) || '';
   }
   if (toolName === 'NotebookEdit') {
-    return stringField(toolInput.new_source) ?? '';
+    return stringField(toolInput.new_source, maxBytes) ?? '';
   }
   return (
-    stringField(toolInput.content) ??
-    stringField(toolInput.new_text) ??
-    stringField(toolInput.new_string) ??
+    stringField(toolInput.content, maxBytes) ??
+    stringField(toolInput.new_text, maxBytes) ??
+    stringField(toolInput.new_string, maxBytes) ??
     ''
   );
 }
 
-function extractConditionValue(field, input) {
+function extractConditionValue(field, input, options = {}) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  const maxBytes = normalizeFieldByteLimit(options.maxFieldBytes);
   const toolName = typeof input.tool_name === 'string' ? input.tool_name : '';
   const toolInput = input.tool_input &&
     typeof input.tool_input === 'object' &&
@@ -66,38 +93,42 @@ function extractConditionValue(field, input) {
 
   switch (field) {
     case 'command':
-      return toolName === 'Bash' ? stringField(toolInput.command) : null;
+      return toolName === 'Bash' ? stringField(toolInput.command, maxBytes) : null;
     case 'file_path':
       return ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'].includes(toolName)
-        ? stringField(toolInput.file_path) ?? stringField(toolInput.notebook_path)
+        ? stringField(toolInput.file_path, maxBytes) ??
+          stringField(toolInput.notebook_path, maxBytes)
         : null;
     case 'new_text':
-      if (toolName === 'MultiEdit') return editValues(toolInput, 'new_string');
+      if (toolName === 'MultiEdit') return editValues(toolInput, 'new_string', maxBytes);
       if (!['Edit', 'Write', 'NotebookEdit'].includes(toolName)) return null;
       return (
-        stringField(toolInput.new_text) ??
-        stringField(toolInput.new_string) ??
-        stringField(toolInput.new_source) ??
-        stringField(toolInput.content)
+        stringField(toolInput.new_text, maxBytes) ??
+        stringField(toolInput.new_string, maxBytes) ??
+        stringField(toolInput.new_source, maxBytes) ??
+        stringField(toolInput.content, maxBytes)
       );
     case 'old_text':
-      if (toolName === 'MultiEdit') return editValues(toolInput, 'old_string');
+      if (toolName === 'MultiEdit') return editValues(toolInput, 'old_string', maxBytes);
       if (!['Edit', 'Write', 'NotebookEdit'].includes(toolName)) return null;
-      return stringField(toolInput.old_text) ?? stringField(toolInput.old_string);
+      return (
+        stringField(toolInput.old_text, maxBytes) ??
+        stringField(toolInput.old_string, maxBytes)
+      );
     case 'user_prompt':
       return input.hook_event_name === 'UserPromptSubmit'
-        ? stringField(input.prompt)
+        ? stringField(input.prompt, maxBytes)
         : null;
     case 'content':
       if (input.hook_event_name === 'Stop') {
-        return stringField(input.last_assistant_message) ?? '';
+        return stringField(input.last_assistant_message, maxBytes) ?? '';
       }
       if (input.hook_event_name === 'UserPromptSubmit') {
-        return stringField(input.prompt) ?? '';
+        return stringField(input.prompt, maxBytes) ?? '';
       }
-      if (toolName === 'Bash') return stringField(toolInput.command) ?? '';
+      if (toolName === 'Bash') return stringField(toolInput.command, maxBytes) ?? '';
       if (['Edit', 'Write', 'MultiEdit', 'NotebookEdit'].includes(toolName)) {
-        return fileContent(toolName, toolInput);
+        return fileContent(toolName, toolInput, maxBytes);
       }
       return null;
     default:
@@ -213,25 +244,35 @@ function evaluateRules(rules, input, options = {}) {
     for (const condition of rule.conditions) fields.add(condition.field);
   }
   if (tasks.length === 0) return { matches: [], diagnostics: [] };
+  const maxFieldBytes = normalizeFieldByteLimit(options.maxFieldBytes);
   const values = {};
   for (const field of fields) {
-    values[field] = extractConditionValue(field, input);
+    values[field] = extractConditionValue(field, input, { maxFieldBytes });
   }
 
+  const literalTasks = tasks.filter(task =>
+    task.conditions.every(condition => condition.operator !== 'regex_match')
+  );
+  const regexTasks = tasks.filter(task =>
+    task.conditions.some(condition => condition.operator === 'regex_match')
+  );
+  const literalResult = evaluateTasks(literalTasks, values);
   const requestedTimeout = Number(options.timeoutMs);
   const timeoutMs = Number.isFinite(requestedTimeout) && requestedTimeout > 0
     ? Math.min(Math.floor(requestedTimeout), 1000)
     : DEFAULT_TIMEOUT_MS;
-  const result = runWorker(tasks, values, timeoutMs);
+  const regexResult = regexTasks.length > 0
+    ? runWorker(regexTasks, values, timeoutMs)
+    : { matchedIndexes: [], diagnostics: [] };
   const matched = new Set(
-    result.matchedIndexes.filter(
+    [...literalResult.matchedIndexes, ...regexResult.matchedIndexes].filter(
       index => Number.isInteger(index) && index >= 0 && index < rules.length
     )
   );
 
   return {
     matches: rules.filter((_rule, index) => matched.has(index)),
-    diagnostics: result.diagnostics,
+    diagnostics: [...literalResult.diagnostics, ...regexResult.diagnostics],
   };
 }
 

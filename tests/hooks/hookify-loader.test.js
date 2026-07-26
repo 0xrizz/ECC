@@ -112,6 +112,22 @@ function runTests() {
     });
   })) passed++; else failed++;
 
+  if (test('simple file patterns preserve the documented file_path matcher', () => {
+    const loaded = validateRule({
+      name: 'protect-env-files',
+      enabled: true,
+      event: 'file',
+      action: 'block',
+      pattern: '\\.env$',
+    }, 'Do not edit environment files.', 'hookify.protect-env-files.local.md');
+
+    assert.deepStrictEqual(loaded.conditions, [{
+      field: 'file_path',
+      operator: 'regex_match',
+      pattern: '\\.env$',
+    }]);
+  })) passed++; else failed++;
+
   if (test('rejects unknown fields, ambiguous matchers, invalid operators, and event-incompatible fields', () => {
     withProject(({ projectRoot, claudeDir }) => {
       writeRule(
