@@ -5,6 +5,12 @@ description: This skill should be used when the user asks to create a hookify ru
 
 # Writing Hookify Rules
 
+## When to Activate
+
+Use this skill when creating, reviewing, or debugging project-local Hookify
+rules, including `.claude/hookify.*.local.md` syntax, event selection,
+condition fields, rule limits, and warn/block behavior.
+
 ## Overview
 
 Hookify rules are Markdown files with YAML frontmatter that define patterns to
@@ -134,7 +140,14 @@ Match Claude Code's submitted `prompt` through the rule field `user_prompt`.
 
 ### Testing
 ```bash
-node -e "console.log(new RegExp('your_pattern', 'i').test('test text'))"
+node - <<'NODE'
+const readline = require('node:readline/promises');
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+const pattern = await rl.question('pattern: ');
+const text = await rl.question('text: ');
+rl.close();
+console.log(new RegExp(pattern, 'i').test(text));
+NODE
 ```
 
 Regex evaluation runs in a resource-limited worker with one hard total

@@ -191,6 +191,39 @@ function runTests() {
     });
   })) passed++; else failed++;
 
+  if (test('rejects condition list items after the conditions block is closed', () => {
+    assert.throws(
+      () => parseFrontmatter([
+        'name: misplaced-condition',
+        'enabled: true',
+        'event: file',
+        'conditions:',
+        '  - field: file_path',
+        '    operator: contains',
+        '    pattern: src/',
+        'action: block',
+        '  - field: content',
+        '    operator: contains',
+        '    pattern: API_KEY',
+      ].join('\n')),
+      /unsupported YAML structure/
+    );
+  })) passed++; else failed++;
+
+  if (test('rejects model-facing messages with bidi or invisible controls', () => {
+    for (const message of ['Looks safe\u202E.gnirts', 'Invisible\uFEFFjoiner']) {
+      assert.throws(
+        () => validateRule({
+          name: 'bidi-message',
+          enabled: true,
+          event: 'bash',
+          pattern: 'deploy',
+        }, message, 'hookify.bidi-message.local.md'),
+        /message contains unsafe invisible or bidirectional characters/
+      );
+    }
+  })) passed++; else failed++;
+
   if (test('rejects traversal names, symlinked files, and a symlinked .claude directory', () => {
     withProject(({ projectRoot, claudeDir }) => {
       const outside = path.join(projectRoot, 'outside.md');
@@ -323,9 +356,20 @@ function runTests() {
 
       const result = loadRules({ projectRoot, event: 'bash' });
 
-      assert.ok(result.rules.length <= LIMITS.maxRuleFiles);
+      assert.strictEqual(result.rules.length, LIMITS.maxRuleFiles);
       assert.ok(result.totalBytes <= LIMITS.maxTotalBytes);
-      assert.ok(result.diagnostics.some(item => item.code === 'HOOKIFY_RULE_LIMIT'));
+      assert.ok(result.diagnostics.some(item =>
+        item.code === 'HOOKIFY_RULE_LIMIT' &&
+        item.message.includes('rule or directory entry count limit reached')
+      ));
+      assert.ok(result.diagnostics.some(item =>
+        item.code === 'HOOKIFY_RULE_LIMIT' &&
+        item.message.includes('file exceeds byte limit')
+      ));
+      assert.ok(result.diagnostics.some(item =>
+        item.code === 'HOOKIFY_RULE_INVALID' &&
+        item.message.includes('pattern-too-long')
+      ));
     });
   })) passed++; else failed++;
 
@@ -345,6 +389,45 @@ function runTests() {
       assert.deepStrictEqual(result.rules, []);
       assert.strictEqual(result.diagnostics.length, 2);
       assert.ok(result.diagnostics.every(item => item.code === 'HOOKIFY_RULE_INVALID'));
+    });
+  })) passed++; else failed++;
+
+  if (test('reports descriptor read failures separately from schema errors', () => {
+    withProject(({ claudeDir }) => {
+      const originalReadSync = fs.readSync;
+      let readAttempted = false;
+      writeRule(
+        claudeDir,
+        'hookify.read-fails.local.md',
+        [
+          'name: read-fails',
+          'enabled: true',
+          'event: bash',
+          'pattern: safe',
+        ].join('\n')
+      );
+
+      try {
+        fs.readSync = function readSyncFails() {
+          readAttempted = true;
+          const error = new Error('sensitive device detail');
+          error.code = 'EIO';
+          throw error;
+        };
+        const result = loadRuleFile({
+          claudeDir,
+          fileName: 'hookify.read-fails.local.md',
+          remainingTotalBytes: LIMITS.maxTotalBytes,
+          expectedRealDirectory: fs.realpathSync(claudeDir),
+        });
+
+        assert.strictEqual(readAttempted, true);
+        assert.strictEqual(result.rule, null);
+        assert.strictEqual(result.diagnostic.code, 'HOOKIFY_RULE_READ_FAILED');
+        assert.ok(!result.diagnostic.message.includes('sensitive device detail'));
+      } finally {
+        fs.readSync = originalReadSync;
+      }
     });
   })) passed++; else failed++;
 

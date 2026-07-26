@@ -631,10 +631,17 @@ function runTests() {
           prompt: '',
         }],
       ];
-      for (const [hookId, _eventName, payload] of cases) {
+      for (const [hookId, eventName, payload] of cases) {
         const output = run(JSON.stringify(payload), { projectRoot, hookId });
         assert.strictEqual(output.exitCode, 0);
         JSON.parse(output.stdout);
+
+        const mismatched = run(JSON.stringify({
+          ...payload,
+          hook_event_name: eventName === 'Stop' ? 'PreToolUse' : 'Stop',
+        }), { projectRoot, hookId });
+        const serialized = JSON.stringify(JSON.parse(mismatched.stdout));
+        assert.ok(serialized.includes('hook event did not match'));
       }
       const invalid = run(Buffer.from('not accepted'), {
         projectRoot,

@@ -81,6 +81,15 @@ function runTests() {
     assert.ok(skill.includes('project `.claude/` directory'));
   })) passed++; else failed++;
 
+  if (test('skill has activation guidance and a regex test command that does not embed user text in code', () => {
+    const skill = read('skills/hookify-rules/SKILL.md');
+
+    assert.ok(skill.includes('## When to Activate'));
+    assert.ok(skill.includes("readline.createInterface"));
+    assert.ok(skill.includes("new RegExp(pattern, 'i')"));
+    assert.ok(!skill.includes("new RegExp('your_pattern'"));
+  })) passed++; else failed++;
+
   if (test('list and configure commands state that malformed rules are skipped rather than enforced', () => {
     const list = read('commands/hookify-list.md');
     const configure = read('commands/hookify-configure.md');

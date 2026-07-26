@@ -444,6 +444,21 @@ function runTests() {
       });
       assert.strictEqual(blocked.warning, '');
 
+      const multiBlocked = mergeHookStdout([
+        {
+          id: 'post:test:block-one',
+          stdout: JSON.stringify({ decision: 'block', reason: 'First reason.' }),
+        },
+        {
+          id: 'post:test:block-two',
+          stdout: JSON.stringify({ decision: 'block', reason: 'Second reason.' }),
+        },
+      ]);
+      assert.deepStrictEqual(JSON.parse(multiBlocked.stdout), {
+        decision: 'block',
+        reason: 'First reason.\n\nSecond reason.',
+      });
+
       const conflicting = mergeHookStdout([
         { id: 'post:test:raw', stdout: 'plain output' },
         { id: 'post:test:ctx', stdout: envelope('kept warning') }
@@ -451,6 +466,32 @@ function runTests() {
       assert.strictEqual(conflicting.stdout, envelope('kept warning'), 'last output should win when raw stdout cannot merge');
       assert.ok(conflicting.warning.includes('post:test:raw'), 'dropped hook IDs should be named');
       assert.ok(conflicting.warning.includes('post:test:ctx'));
+    })
+  )
+    passed++;
+  else failed++;
+
+  if (
+    test('post:hookify receives dispatcher truncation state and fails open without pass-through', () => {
+      const { SYNC_HOOKS, runHooks } = require(dispatcherPath);
+      const hookify = SYNC_HOOKS.find(hook => hook.id === 'post:hookify');
+      const result = runHooks(
+        JSON.stringify({
+          hook_event_name: 'PostToolUse',
+          tool_name: 'Bash',
+          tool_input: { command: 'true' },
+          tool_response: {},
+        }),
+        [hookify],
+        { truncated: true, toolName: 'Bash' }
+      );
+      const parsed = JSON.parse(result.stdout);
+      assert.ok(
+        parsed.hookSpecificOutput.additionalContext.includes(
+          'input exceeded the byte limit'
+        )
+      );
+      assert.strictEqual(result.stderr, '');
     })
   )
     passed++;

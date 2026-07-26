@@ -13,6 +13,7 @@ const {
 } = require('../../scripts/hooks/hookify-engine');
 const {
   evaluateTasks,
+  MAX_DIAGNOSTICS,
   writeResult,
 } = require('../../scripts/hooks/hookify-regex-worker');
 
@@ -310,6 +311,29 @@ function runTests() {
     assert.ok(!result.diagnostics[0].message.includes('anything'));
   })) passed++; else failed++;
 
+  if (test('caps invalid-regex diagnostics without discarding valid matches', () => {
+    const input = {
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: 'npm publish' },
+    };
+    const invalidRules = Array.from(
+      { length: MAX_DIAGNOSTICS + 20 },
+      (_value, index) => rule({
+        name: `invalid-${index}`,
+        source: `hookify.invalid-${index}.local.md`,
+        conditions: [{ field: 'command', operator: 'regex_match', pattern: '(' }],
+      })
+    );
+    const validRule = rule({ name: 'valid-regex' });
+
+    const result = evaluateRules([...invalidRules, validRule], input);
+
+    assert.deepStrictEqual(result.matches.map(item => item.name), ['valid-regex']);
+    assert.ok(result.diagnostics.length <= MAX_DIAGNOSTICS + 1);
+    assert.ok(result.diagnostics.some(item => item.code === 'HOOKIFY_DIAGNOSTICS_TRUNCATED'));
+  })) passed++; else failed++;
+
   if (test('a regex timeout preserves an unrelated literal-only block match', () => {
     const input = {
       hook_event_name: 'PreToolUse',
@@ -452,13 +476,23 @@ function runTests() {
 
     const shared = new SharedArrayBuffer(512);
     writeResult(shared, {
+      matchedIndexes: [2],
+      diagnostics: [],
+    });
+    let header = new Int32Array(shared, 0, 2);
+    assert.strictEqual(Atomics.load(header, 0), 1);
+    let bytes = new Uint8Array(shared, 8, Atomics.load(header, 1));
+    let result = JSON.parse(Buffer.from(bytes).toString('utf8'));
+    assert.deepStrictEqual(result.matchedIndexes, [2]);
+
+    writeResult(shared, {
       matchedIndexes: [],
       diagnostics: [{ code: 'X', message: 'x'.repeat(1000) }],
     });
-    const header = new Int32Array(shared, 0, 2);
+    header = new Int32Array(shared, 0, 2);
     assert.strictEqual(Atomics.load(header, 0), 2);
-    const bytes = new Uint8Array(shared, 8, Atomics.load(header, 1));
-    const result = JSON.parse(Buffer.from(bytes).toString('utf8'));
+    bytes = new Uint8Array(shared, 8, Atomics.load(header, 1));
+    result = JSON.parse(Buffer.from(bytes).toString('utf8'));
     assert.strictEqual(result.diagnostics[0].code, 'HOOKIFY_REGEX_WORKER_FAILED');
   })) passed++; else failed++;
 

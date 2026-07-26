@@ -36,10 +36,11 @@ const SYNC_HOOKS = [
     matcher: '*',
     profiles: 'minimal,standard,strict',
     script: 'scripts/hooks/hookify-runner.js',
-    run(raw) {
+    run(raw, context = {}) {
       const result = runHookify(raw, {
         expectedEvent: 'PostToolUse',
-        projectRoot: process.cwd()
+        projectRoot: process.cwd(),
+        truncated: context.truncated === true
       });
       return result.stdout === '{}' ? { ...result, stdout: '' } : result;
     }

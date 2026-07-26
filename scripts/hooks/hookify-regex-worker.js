@@ -8,6 +8,7 @@
 const { isMainThread, workerData } = require('worker_threads');
 
 const HEADER_BYTES = Int32Array.BYTES_PER_ELEMENT * 2;
+const MAX_DIAGNOSTICS = 32;
 
 function safeSource(value) {
   return typeof value === 'string' && /^hookify\.[A-Za-z0-9._-]+\.local\.md$/.test(value)
@@ -34,7 +35,7 @@ function evaluateCondition(condition, values, diagnostics, source) {
       try {
         return new RegExp(condition.pattern, 'i').test(value);
       } catch {
-        diagnostics.push({
+        addDiagnostic(diagnostics, {
           code: 'HOOKIFY_REGEX_INVALID',
           message: `Hookify skipped ${safeSource(source)}: invalid regular expression.`,
         });
@@ -42,6 +43,22 @@ function evaluateCondition(condition, values, diagnostics, source) {
       }
     default:
       return false;
+  }
+}
+
+function addDiagnostic(diagnostics, diagnostic) {
+  if (diagnostics.length < MAX_DIAGNOSTICS) {
+    diagnostics.push(diagnostic);
+    return;
+  }
+  if (
+    diagnostics.length === MAX_DIAGNOSTICS &&
+    !diagnostics.some(item => item.code === 'HOOKIFY_DIAGNOSTICS_TRUNCATED')
+  ) {
+    diagnostics.push({
+      code: 'HOOKIFY_DIAGNOSTICS_TRUNCATED',
+      message: 'Hookify skipped additional diagnostics because the diagnostic limit was reached.',
+    });
   }
 }
 
@@ -105,5 +122,6 @@ if (!isMainThread) {
 
 module.exports = {
   evaluateTasks,
+  MAX_DIAGNOSTICS,
   writeResult,
 };

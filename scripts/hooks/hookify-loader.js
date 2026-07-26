@@ -50,6 +50,7 @@ const EVENT_FIELDS = Object.freeze({
   stop: new Set(['content']),
   all: new Set(['command', 'file_path', 'new_text', 'old_text', 'content', 'user_prompt']),
 });
+const MODEL_FACING_FORMAT_CONTROL = /[\u200B-\u200F\u2028\u2029\u202A-\u202E\u2066-\u2069\uFEFF]/u;
 
 function diagnostic(code, fileName, detail) {
   const label = fileName ? ` ${fileName}` : '';
@@ -71,6 +72,10 @@ function hasUnsafeControlCharacters(value, allowNewlines = false) {
     return true;
   }
   return false;
+}
+
+function hasUnsafeModelFacingCharacters(value) {
+  return MODEL_FACING_FORMAT_CONTROL.test(value);
 }
 
 function parseQuotedScalar(rawValue) {
@@ -118,6 +123,7 @@ function parseFrontmatter(frontmatterText) {
   const lines = frontmatterText.split('\n');
   let conditions = null;
   let currentCondition = null;
+  let insideConditions = false;
 
   for (const originalLine of lines) {
     const line = originalLine.endsWith('\r')
@@ -136,15 +142,17 @@ function parseFrontmatter(frontmatterText) {
         conditions = [];
         result.conditions = conditions;
         currentCondition = null;
+        insideConditions = true;
       } else {
         setUnique(result, key, parseScalar(rawValue));
         currentCondition = null;
+        insideConditions = false;
       }
       continue;
     }
 
     const listStart = line.match(/^ {2}- ([a-z_]+):(?:[ \t]*(.*))?$/);
-    if (listStart && conditions) {
+    if (listStart && insideConditions && conditions) {
       const [, key, rawValue = ''] = listStart;
       if (!CONDITION_FIELDS.has(key)) throw new Error(`unknown condition field ${key}`);
       currentCondition = {};
@@ -154,7 +162,7 @@ function parseFrontmatter(frontmatterText) {
     }
 
     const continuation = line.match(/^ {4}([a-z_]+):(?:[ \t]*(.*))?$/);
-    if (continuation && currentCondition) {
+    if (continuation && insideConditions && currentCondition) {
       const [, key, rawValue = ''] = continuation;
       if (!CONDITION_FIELDS.has(key)) throw new Error(`unknown condition field ${key}`);
       setUnique(currentCondition, key, parseScalar(rawValue));
@@ -186,6 +194,9 @@ function validateString(value, field, options = {}) {
   }
   if (hasUnsafeControlCharacters(value, options.allowNewlines === true)) {
     throw new Error(`${field} contains control characters`);
+  }
+  if (options.modelFacing === true && hasUnsafeModelFacingCharacters(value)) {
+    throw new Error(`${field} contains unsafe invisible or bidirectional characters`);
   }
   if (options.maxLength && value.length > options.maxLength) {
     throw new Error(`${field} exceeds its length limit`);
@@ -287,7 +298,10 @@ function validateRule(frontmatter, message, source) {
     conditions = frontmatter.conditions.map(condition => validateCondition(condition, event));
   }
 
-  validateString(message, 'message', { allowNewlines: true });
+  validateString(message, 'message', {
+    allowNewlines: true,
+    modelFacing: true,
+  });
   if (Buffer.byteLength(message, 'utf8') > LIMITS.maxMessageBytes) {
     throw new Error('message exceeds its byte limit');
   }
@@ -323,6 +337,10 @@ function readFileBounded(fileDescriptor, maxBytes) {
     buffer: buffer.subarray(0, Math.min(offset, maxBytes)),
     exceeded: offset > maxBytes,
   };
+}
+
+function isRuleFileReadError(error) {
+  return ['EACCES', 'EIO', 'EISDIR', 'EPERM'].includes(error?.code);
 }
 
 function loadRuleFile({
@@ -469,10 +487,12 @@ function loadRuleFile({
       diagnostic: null,
       bytesRead: consumedBytes,
     };
-  } catch {
+  } catch (error) {
     return {
       rule: null,
-      diagnostic: diagnostic('HOOKIFY_RULE_INVALID', fileName, 'invalid rule schema or encoding'),
+      diagnostic: isRuleFileReadError(error)
+        ? diagnostic('HOOKIFY_RULE_READ_FAILED', fileName, 'could not read rule file')
+        : diagnostic('HOOKIFY_RULE_INVALID', fileName, 'invalid rule schema or encoding'),
       bytesRead: consumedBytes,
     };
   } finally {

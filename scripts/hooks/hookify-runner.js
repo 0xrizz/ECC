@@ -20,6 +20,9 @@ const LIMITS = Object.freeze({
   ...LOADER_LIMITS,
   maxInputBytes: 256 * 1024,
   maxOutputBytes: 8192,
+  maxContextBytes: 7000,
+  maxContextBytesWithBlock: 3000,
+  maxBlockReasonBytes: 3800,
   regexTimeoutMs: 250,
 });
 const EVENTS = new Set([
@@ -216,9 +219,11 @@ function buildOutput(eventName, matches, diagnostics) {
     ...warnings.map(formatRule),
     ...formatDiagnostics(diagnostics),
   ];
-  const contextLimit = blocking.length > 0 ? 3000 : 7000;
+  const contextLimit = blocking.length > 0
+    ? LIMITS.maxContextBytesWithBlock
+    : LIMITS.maxContextBytes;
   const additionalContext = joinBounded(contextItems, contextLimit);
-  const blockReason = joinBounded(blocking.map(formatRule), 3800);
+  const blockReason = joinBounded(blocking.map(formatRule), LIMITS.maxBlockReasonBytes);
 
   if (blocking.length === 0) {
     return contextOutput(eventName, additionalContext);
