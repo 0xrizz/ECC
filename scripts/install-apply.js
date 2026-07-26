@@ -32,8 +32,8 @@ Usage: install.sh [--target <${LEGACY_INSTALL_TARGETS.join('|')}>] [--dry-run] [
        install.sh [--dry-run] [--json] --config <path>
 
 Targets:
-  claude       (default) - Install ECC into ~/.claude/ with managed rules/skills under rules/ecc and skills/ecc
-  claude-project - Install ECC into ./.claude/ (per-project) with managed rules/skills under rules/ecc and skills/ecc
+  claude       (default) - Install ECC into ~/.claude/ with managed rules under rules/ecc and flat skills under skills/
+  claude-project - Install ECC into ./.claude/ (per-project) with managed rules under rules/ecc and flat skills under skills/
   cursor       - Install rules, hooks, and bundled Cursor configs to ./.cursor/
   antigravity  - Install rules, workflows, skills, and agents to ./.agent/
   codex        - Install shared agents/config into ~/.codex/
@@ -102,7 +102,10 @@ function printHumanPlan(plan, dryRun) {
       console.log(`Excluded modules: ${plan.excludedModuleIds.join(', ')}`);
     }
   }
-  console.log(`Operations: ${plan.operations.length}`);
+  console.log(`${dryRun ? 'Operations' : 'Applied operations'}: ${plan.operations.length}`);
+  if (!dryRun && Array.isArray(plan.skippedOperations) && plan.skippedOperations.length > 0) {
+    console.log(`Skipped operations: ${plan.skippedOperations.length}`);
+  }
 
   if (plan.warnings.length > 0) {
     console.log('\nWarnings:');
@@ -111,9 +114,16 @@ function printHumanPlan(plan, dryRun) {
     }
   }
 
-  console.log('\nPlanned file operations:');
+  console.log(`\n${dryRun ? 'Planned' : 'Applied'} file operations:`);
   for (const operation of plan.operations) {
     console.log(`- ${operation.sourceRelativePath} -> ${operation.destinationPath}`);
+  }
+
+  if (!dryRun && Array.isArray(plan.skippedOperations) && plan.skippedOperations.length > 0) {
+    console.log('\nSkipped file operations:');
+    for (const operation of plan.skippedOperations) {
+      console.log(`- ${operation.sourceRelativePath} -> ${operation.destinationPath}`);
+    }
   }
 
   if (!dryRun) {

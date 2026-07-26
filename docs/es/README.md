@@ -759,13 +759,13 @@ cp -r rules/arkts ~/.claude/rules/ecc/
 
 # Copiar skills primero (superficie principal de flujo de trabajo)
 # Recomendado (nuevos usuarios): solo skills generales/básicas
-mkdir -p ~/.claude/skills/ecc
-cp -r .agents/skills/* ~/.claude/skills/ecc/
-cp -r skills/search-first ~/.claude/skills/ecc/
+mkdir -p ~/.claude/skills
+cp -r .agents/skills/* ~/.claude/skills/
+cp -r skills/search-first ~/.claude/skills/
 
 # Opcional: añadir skills específicas de framework solo cuando las necesites
 # for s in django-patterns django-tdd laravel-patterns springboot-patterns quarkus-patterns; do
-# cp -r skills/$s ~/.claude/skills/ecc/
+# cp -r skills/$s ~/.claude/skills/
 # done
 
 # Opcional: mantener compatibilidad con entradas slash durante la migración
