@@ -65,13 +65,17 @@ The execution sequence is deliberately read-only first and promotion-gated:
    merge, approval, or filesystem mutation. Bind caller identity and a
    canonical realpath workspace ID at server startup; expose only records owned
    by that workspace/caller; deny undeclared read capabilities; and rate-limit
-   and audit every read without logging returned content.
+   and audit every read without logging returned content. Version every tool's
+   request and response schema, validate both at the boundary, and return the
+   common `{success, data, error, pagination}` envelope. Bounded list and diff
+   responses include cursor, `has_more`, and `truncated` metadata.
 3. **ECC2 MCP mutation plane.** Add `create_task`, `merge_task`, and
    `approve_tool` only after the read plane is stable. Require explicit
    capability gates, immutable audit receipts, dry-run previews, and the
    existing risk/profile policy at every mutation boundary. Caller identity,
    workspace ownership, and per-tool authorization fail closed before inputs
-   reach the store or filesystem.
+   reach the store or filesystem. Mutation tools use the same versioned,
+   boundary-validated request and response schemas and common envelope.
 4. **Worktree lifecycle contract.** Define and schema-validate
    `ecc.worktree.yml`; specify `new`, `split`, `fork`, and `close` state
    transitions; define bounded context seeding and lifecycle hooks without
@@ -82,7 +86,10 @@ The execution sequence is deliberately read-only first and promotion-gated:
    transactional acquire/renew/release, unique overlap enforcement, and
    compare-and-swap owner/epoch checks. Show overlap before blocking, then add
    queue serialization, bounded lease expiry/recovery after heartbeat loss,
-   and human escalation records.
+   and human escalation records. Incomplete or uninstrumented touched-path
+   coverage blocks mutation unless the caller atomically acquires a
+   workspace-wide lease. Revalidate the final touched-path set and lease
+   ownership immediately before every mutation and merge.
 6. **Consent-gated telemetry schema.** Standardize `ecc.*` span names and
    bounded attributes, define `TRACEPARENT` propagation, and require explicit
    consent, schema validation, and deterministic redaction before any sink.
@@ -103,17 +110,21 @@ The execution sequence is deliberately read-only first and promotion-gated:
    locks, and optional dual-engine scanning from
    [issue #2415](https://github.com/affaan-m/ECC/issues/2415).
 10. **Distribution interop.** Add provenance-preserving npx-skills and ClawHub
-   import/export only after the policy and promotion contracts are stable.
-   Training or inference automation remains deferred until telemetry,
-   evaluation, consent, and rollback gates are operational.
+   import/export only after the policy and promotion contracts plus
+   AgentShield's signed-provenance and registry-lock verification are stable.
+   Import and export deny by default when provenance or lock verification is
+   missing, invalid, or unavailable. Training or inference automation remains
+   deferred until telemetry, evaluation, consent, and rollback gates are
+   operational.
 
 Each numbered item is a separate implementation lane. Do not combine the
 read-only MCP plane with mutations, the telemetry schema with live export, or
 candidate generation with promotion. Each lane requires unit and integration
-tests, end-to-end coverage for its critical operator flow, at least 80% line
-and function coverage, adversarial boundary tests, a migration/rollback note,
-and fresh Linux, macOS, and Windows evidence before the next dependent lane
-begins.
+tests plus end-to-end coverage for its critical operator flow to fail before
+implementation begins. After implementation, those tests must pass with at
+least 80% line and function coverage, adversarial boundary tests, a
+migration/rollback note, and fresh Linux, macOS, and Windows evidence before
+the next dependent lane begins.
 
 ## 2026-05-20 Delta
 
