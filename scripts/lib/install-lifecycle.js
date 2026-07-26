@@ -346,18 +346,26 @@ function writeFileNoFollow(filePath, content, mode) {
   }
 }
 
-function readFileNoFollow(filePath, encoding) {
+function readFileWithMetadataNoFollow(filePath, encoding) {
   const flags = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0);
   const fileDescriptor = fs.openSync(filePath, flags);
 
   try {
-    if (!fs.fstatSync(fileDescriptor).isFile()) {
+    const stat = fs.fstatSync(fileDescriptor);
+    if (!stat.isFile()) {
       throw new Error(`Refusing to read non-file path: ${filePath}`);
     }
-    return fs.readFileSync(fileDescriptor, encoding);
+    return {
+      content: fs.readFileSync(fileDescriptor, encoding),
+      mode: stat.mode,
+    };
   } finally {
     fs.closeSync(fileDescriptor);
   }
+}
+
+function readFileNoFollow(filePath, encoding) {
+  return readFileWithMetadataNoFollow(filePath, encoding).content;
 }
 
 function readJsonNoFollow(filePath) {
@@ -376,14 +384,13 @@ function writeContainedFile(destinationPath, content, trustedRoot, action, mode)
 }
 
 function copyContainedFile(sourcePath, destinationPath, trustedRoot, action) {
-  const sourceStat = fs.statSync(sourcePath);
-  const sourceContent = fs.readFileSync(sourcePath);
+  const source = readFileWithMetadataNoFollow(sourcePath);
   return writeContainedFile(
     destinationPath,
-    sourceContent,
+    source.content,
     trustedRoot,
     action,
-    sourceStat.mode & 0o777
+    source.mode & 0o777
   );
 }
 

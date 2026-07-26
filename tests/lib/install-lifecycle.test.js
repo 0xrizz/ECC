@@ -667,6 +667,47 @@ function runTests() {
     }
   })) passed++; else failed++;
 
+  if (test('repair reads source content and mode from one no-follow descriptor', () => {
+    const homeDir = createTempDir('install-lifecycle-home-');
+    const projectRoot = createTempDir('install-lifecycle-project-');
+    const sourcePath = path.join(REPO_ROOT, 'rules', 'common', 'coding-style.md');
+    const originalStatSync = fs.statSync;
+
+    try {
+      const targetRoot = path.join(projectRoot, '.cursor');
+      const destinationPath = path.join(targetRoot, 'rules', 'coding-style.md');
+      writeCursorState(projectRoot, {
+        operations: [
+          managedOperation('copy-file', destinationPath, {
+            sourceRelativePath: 'rules/common/coding-style.md',
+            strategy: 'copy-file',
+          }),
+        ],
+      });
+
+      fs.statSync = function rejectSeparateSourceMetadataLookup(candidatePath, ...args) {
+        if (path.resolve(candidatePath) === path.resolve(sourcePath)) {
+          throw new Error('source metadata must come from the opened descriptor');
+        }
+        return originalStatSync.call(fs, candidatePath, ...args);
+      };
+
+      const result = repairInstalledStates({
+        repoRoot: REPO_ROOT,
+        homeDir,
+        projectRoot,
+        targets: ['cursor'],
+      });
+
+      assert.strictEqual(result.results[0].status, 'repaired');
+      assert.ok(fs.readFileSync(destinationPath).equals(fs.readFileSync(sourcePath)));
+    } finally {
+      fs.statSync = originalStatSync;
+      cleanup(homeDir);
+      cleanup(projectRoot);
+    }
+  })) passed++; else failed++;
+
   if (test('repair reports invalid states, missing sources, unsupported operations, and no-op refreshes', () => {
     const homeDir = createTempDir('install-lifecycle-home-');
     const invalidProjectRoot = createTempDir('install-lifecycle-invalid-');
