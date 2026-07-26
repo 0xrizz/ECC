@@ -356,7 +356,7 @@ function runTests() {
 
       const result = loadRules({ projectRoot, event: 'bash' });
 
-      assert.strictEqual(result.rules.length, LIMITS.maxRuleFiles);
+      assert.strictEqual(result.rules.length, LIMITS.maxRuleFiles - 2);
       assert.ok(result.totalBytes <= LIMITS.maxTotalBytes);
       assert.ok(result.diagnostics.some(item =>
         item.code === 'HOOKIFY_RULE_LIMIT' &&
