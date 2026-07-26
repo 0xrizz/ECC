@@ -401,6 +401,67 @@ function assertMutationAllowed(command) {
   }
 }
 
+function runInitCommand({ command, options, positionals, roots }) {
+  requireNoPositionals(positionals, command);
+  return printInit(
+    initializeVault({ roots, scopes: options.scopes || undefined }),
+    options.json
+  );
+}
+
+function runWriteCommand({ command, options, positionals, roots }) {
+  requireNoPositionals(positionals, command);
+  if (!options.title) throw new Error('--title is required.');
+  if (command === 'handoff' && !options.from) {
+    throw new Error('--from is required for handoffs.');
+  }
+  if (command === 'handoff' && (!options.targets || options.targets.length === 0)) {
+    throw new Error('At least one --target is required for handoffs.');
+  }
+  return printWrite(
+    saveMemory(saveInput(options, command === 'handoff' ? 'handoff' : null), { roots }),
+    options.json
+  );
+}
+
+function runSearchCommand({ options, positionals, roots }) {
+  const query = positionals.join(' ');
+  return printSearch(query, searchMemories(query, {
+    roots,
+    scopes: options.scopes,
+    kinds: options.kinds,
+    targetHarness: options.targetHarness,
+    limit: options.limit,
+  }), options.json);
+}
+
+function runReadCommand({ options, positionals, roots }) {
+  if (positionals.length !== 1) {
+    throw new Error('read requires exactly one memory ID.');
+  }
+  return printRead(readMemoryById(positionals[0], {
+    roots,
+    scopes: options.scopes,
+  }), options.json);
+}
+
+function runDoctorCommand({ command, options, positionals, roots }) {
+  requireNoPositionals(positionals, command);
+  return printDoctor(doctorMemoryVault({
+    roots,
+    scopes: options.scopes,
+  }), options.json);
+}
+
+const COMMAND_HANDLERS = Object.freeze({
+  doctor: runDoctorCommand,
+  handoff: runWriteCommand,
+  init: runInitCommand,
+  read: runReadCommand,
+  save: runWriteCommand,
+  search: runSearchCommand,
+});
+
 function runCommand(parsed) {
   const { command, options, positionals } = parsed;
   if (options.help || command === 'help') {
@@ -411,51 +472,11 @@ function runCommand(parsed) {
     assertMutationAllowed(command);
   }
   const roots = resolveVaultRoots();
-
-  if (command === 'init') {
-    requireNoPositionals(positionals, command);
-    return printInit(
-      initializeVault({ roots, scopes: options.scopes || undefined }),
-      options.json
-    );
-  }
-  if (command === 'save' || command === 'handoff') {
-    requireNoPositionals(positionals, command);
-    if (!options.title) throw new Error('--title is required.');
-    if (command === 'handoff' && !options.from) throw new Error('--from is required for handoffs.');
-    if (command === 'handoff' && (!options.targets || options.targets.length === 0)) {
-      throw new Error('At least one --target is required for handoffs.');
-    }
-    return printWrite(
-      saveMemory(saveInput(options, command === 'handoff' ? 'handoff' : null), { roots }),
-      options.json
-    );
-  }
-  if (command === 'search') {
-    const query = positionals.join(' ');
-    return printSearch(query, searchMemories(query, {
-      roots,
-      scopes: options.scopes,
-      kinds: options.kinds,
-      targetHarness: options.targetHarness,
-      limit: options.limit,
-    }), options.json);
-  }
-  if (command === 'read') {
-    if (positionals.length !== 1) throw new Error('read requires exactly one memory ID.');
-    return printRead(readMemoryById(positionals[0], {
-      roots,
-      scopes: options.scopes,
-    }), options.json);
-  }
-  if (command === 'doctor') {
-    requireNoPositionals(positionals, command);
-    return printDoctor(doctorMemoryVault({
-      roots,
-      scopes: options.scopes,
-    }), options.json);
-  }
-  throw new Error(`Unknown memory command: ${command}`);
+  const handler = Object.hasOwn(COMMAND_HANDLERS, command)
+    ? COMMAND_HANDLERS[command]
+    : null;
+  if (!handler) throw new Error(`Unknown memory command: ${command}`);
+  return handler({ command, options, positionals, roots });
 }
 
 function main(argv = process.argv.slice(2)) {

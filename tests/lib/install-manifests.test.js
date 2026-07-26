@@ -172,13 +172,14 @@ function runTests() {
     const component = getInstallComponent('skill:unified-memory');
     assert.deepStrictEqual(component.moduleIds, ['skill-unified-memory']);
     assert.match(component.description, /ecc-universal/i);
-    assert.match(component.description, /separate|external|runtime/i);
+    assert.match(component.description, /separate|external/i);
 
     const modules = listInstallModules();
     const singleSkillModule = modules.find(module => module.id === 'skill-unified-memory');
     const workflowModule = modules.find(module => module.id === 'workflow-quality');
     assert.ok(singleSkillModule, 'Should define an explicit unified-memory module');
     assert.match(singleSkillModule.description, /ecc-universal/i);
+    assert.match(singleSkillModule.description, /separate|external/i);
     assert.match(workflowModule.description, /ecc-universal/i);
 
     const plan = resolveInstallPlan({

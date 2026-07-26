@@ -8,7 +8,11 @@ const { spawnSync } = require('child_process');
 
 const MEMORY_SCRIPT = path.join(__dirname, '..', '..', 'scripts', 'memory.js');
 const ECC_SCRIPT = path.join(__dirname, '..', '..', 'scripts', 'ecc.js');
-const { readBoundedStdin, sanitizeTerminalText } = require(MEMORY_SCRIPT);
+const {
+  readBoundedStdin,
+  runCommand,
+  sanitizeTerminalText,
+} = require(MEMORY_SCRIPT);
 
 let passed = 0;
 let failed = 0;
@@ -61,6 +65,11 @@ function json(result) {
 }
 
 console.log('\n=== Testing ecc memory CLI ===\n');
+
+test('keeps runCommand focused on dispatch under the function-size guideline', () => {
+  const lineCount = runCommand.toString().split('\n').length;
+  assert.ok(lineCount < 50, `runCommand is ${lineCount} lines; expected fewer than 50`);
+});
 
 test('shows memory command help directly and through the ecc router', () => {
   const fixture = createFixture();
