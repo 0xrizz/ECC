@@ -63,6 +63,10 @@ function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
+function normalizeLineEndings(value) {
+  return value.replace(/\r\n/g, '\n');
+}
+
 function writeInstinct(filePath, id, confidence = 0.9) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(
@@ -376,7 +380,7 @@ test('promote removes only the promoted instinct block from project source', () 
     const result = runCli(root, ['promote', 'promote-me', '--force'], { cwd: repoDir });
     assert.strictEqual(result.status, 0, result.stderr);
     assert.ok(fs.existsSync(path.join(root, 'instincts', 'personal', 'promote-me.yaml')));
-    assert.strictEqual(fs.readFileSync(sourceFile, 'utf8'), retainedBlock);
+    assert.strictEqual(normalizeLineEndings(fs.readFileSync(sourceFile, 'utf8')), retainedBlock);
   } finally {
     cleanupDir(root);
     cleanupDir(repoParent);
@@ -445,7 +449,7 @@ test('promote preserves malformed and foreign source blocks while removing targe
     const result = runCli(root, ['promote', 'promote-foreign', '--force'], { cwd: repoDir });
     assert.strictEqual(result.status, 0, result.stderr);
     assert.ok(fs.existsSync(path.join(root, 'instincts', 'personal', 'promote-foreign.yaml')));
-    assert.strictEqual(fs.readFileSync(sourceFile, 'utf8'), `${foreignContent}\n`);
+    assert.strictEqual(normalizeLineEndings(fs.readFileSync(sourceFile, 'utf8')), `${foreignContent}\n`);
   } finally {
     cleanupDir(root);
     cleanupDir(repoParent);
