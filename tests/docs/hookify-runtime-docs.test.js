@@ -85,11 +85,15 @@ function runTests() {
 
   if (test('skill has activation guidance and a regex test command that does not embed user text in code', () => {
     const skill = read('skills/hookify-rules/SKILL.md');
+    const testingSection = skill.match(/### Testing\s+```bash\n([\s\S]*?)\n```/);
 
     assert.ok(skill.includes('## When to Activate'));
-    assert.ok(skill.includes("readline.createInterface"));
-    assert.ok(skill.includes("new RegExp(pattern, 'i')"));
-    assert.ok(!skill.includes("new RegExp('your_pattern'"));
+    assert.ok(testingSection, 'Hookify skill should include a fenced bash testing example');
+
+    const testingExample = testingSection[1];
+    assert.ok(testingExample.includes('readline.createInterface'));
+    assert.ok(testingExample.includes("new RegExp(pattern, 'i')"));
+    assert.ok(!testingExample.includes("new RegExp('your_pattern'"));
   })) passed++; else failed++;
 
   if (test('list and configure commands state that malformed rules are skipped rather than enforced', () => {
