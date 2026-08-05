@@ -36,8 +36,11 @@ The canonical MCP server exposes only `ito_auth`, `ito_find`, and `ito_status`.
 ECC includes an opt-in configuration template pointing to the local built MCP
 entry. It does not enable the server by default.
 
-The former browser/manual-copy command is retired. `ecc ito` performs no
-browser navigation and stores no economic state.
+The former browser/manual-copy command is retired. `ecc ito auth` delegates to
+the canonical CLI's device authorization, which opens the Itô verification page
+by default and persists a device token in macOS Keychain. `--no-browser`
+suppresses that page handoff. ECC itself performs no browser automation and
+stores no economic state.
 
 ## Local install
 
@@ -53,19 +56,22 @@ Set `ECC_ITO_CLI_EXECUTABLE` to the explicit absolute built entry:
     /absolute/path/to/ito-cloud-runtime/cli/ito-compute-cli/dist/bin/ito.js
 
 ECC does not resolve the credential-bearing client through `PATH`; this avoids
-forwarding `ITO_API_KEY` to an unrelated executable with the same name.
+forwarding authentication material to an unrelated executable with the same
+name.
 
 For MCP, configure `node` with:
 
     /absolute/path/to/ito-cloud-runtime/cli/ito-compute-cli/dist/bin/ito-mcp.js
 
-Inject `ITO_API_KEY` with 1Password or the launching environment. ECC forwards
-only `ITO_API_KEY`, optional Itô endpoint overrides, and the minimum process
-environment. It does not inspect or log the key.
+Device authorization is the default. ECC forwards only the required device
+authorization settings, optional Itô endpoint overrides, and the minimum
+process environment. Legacy `ITO_API_KEY` is forwarded only with explicit
+`ITO_AUTH_MODE=legacy`; ECC does not inspect or log it.
 
 ## Authority and economics
 
-- `auth` validates the configured Itô API key.
+- `auth` starts canonical device authorization, with `--no-browser` available
+  when the operator does not want the CLI to open the verification page.
 - `find` reads live inventory and submits a live authenticated RFQ. An operator
   or agent must gather every hard topology/economic constraint and obtain
   explicit buyer authority before invoking it.

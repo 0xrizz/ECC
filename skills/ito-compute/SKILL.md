@@ -8,8 +8,8 @@ metadata:
 # Itô Compute
 
 Use the canonical Itô compute CLI or MCP server. ECC does not implement a
-parallel client, browser handoff, local simulation, reservation, workload
-runner, or inference server.
+parallel client, local simulation, reservation, workload runner, or inference
+server. ECC itself does no browser automation.
 
 ## Install the canonical local package
 
@@ -30,12 +30,17 @@ Set `ECC_ITO_CLI_EXECUTABLE` to the explicit absolute built entry:
 ```
 
 ECC never discovers this credential-bearing client through `PATH`.
-Inject `ITO_API_KEY` through 1Password or the launching process environment.
-Never put it in arguments, tracked files, MCP results, logs, or chat.
+Device authorization is the default. Keep legacy `ITO_API_KEY` only with
+explicit `ITO_AUTH_MODE=legacy`; never put it in arguments, tracked files, MCP
+results, logs, or chat.
 
 ## CLI workflow
 
-1. Run `ecc ito auth` before the first operation.
+1. Run `ecc ito auth` before the first operation. ECC delegates this to the
+   canonical CLI's device authorization, which opens the Itô verification page
+   by default and persists a device token in macOS Keychain. Use
+   `ecc ito auth --no-browser` to suppress the page handoff. ECC itself does no
+   browser automation.
 2. Before `ecc ito find`, obtain explicit buyer authority to submit an RFQ.
    - Require `gpu`, `count`, whole `days`, `max-rate`, `nodes`,
      `gpus-per-node`, `storage-tb`, `start-window`, `form-factor`,

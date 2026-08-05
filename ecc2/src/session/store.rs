@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use crate::comms;
 use crate::config::Config;
+use crate::harness_eval::{CandidateSpec, PairedSample, PromotionPolicy};
 use crate::observability::{ToolCallEvent, ToolLogEntry, ToolLogPage};
 
 use super::output::{OutputLine, OutputStream, OUTPUT_BUFFER_LIMIT};
@@ -25,6 +26,25 @@ use super::{
 
 pub struct StateStore {
     conn: Connection,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct HarnessAuditEntry {
+    pub id: i64,
+    pub event_type: String,
+    pub candidate_id: String,
+    pub prior_candidate_id: Option<String>,
+    pub evaluation_id: Option<i64>,
+    pub evidence_ref: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct HarnessPromotionOutcome {
+    pub evaluation_id: Option<i64>,
+    pub promoted: bool,
+    pub rolled_back: bool,
+    pub failures: Vec<String>,
 }
 
 const DEFAULT_CONTEXT_GRAPH_OBSERVATION_RETENTION: usize = 12;
@@ -402,6 +422,45 @@ impl StateStore {
                 last_auto_prune_pruned INTEGER NOT NULL DEFAULT 0,
                 last_auto_prune_active_skipped INTEGER NOT NULL DEFAULT 0
             );
+
+            CREATE TABLE IF NOT EXISTS harness_candidates (
+                id TEXT PRIMARY KEY,
+                canonical_config_json TEXT NOT NULL,
+                trace_refs_json TEXT NOT NULL,
+                evidence_refs_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS harness_evaluations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                candidate_id TEXT NOT NULL REFERENCES harness_candidates(id),
+                baseline_id TEXT NOT NULL REFERENCES harness_candidates(id),
+                evaluator TEXT NOT NULL,
+                samples_json TEXT NOT NULL,
+                policy_json TEXT NOT NULL,
+                comparison_json TEXT NOT NULL,
+                evidence_ref TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS active_harness_config (
+                slot TEXT PRIMARY KEY CHECK(slot = 'default'),
+                candidate_id TEXT NOT NULL REFERENCES harness_candidates(id),
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS harness_eval_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type TEXT NOT NULL,
+                candidate_id TEXT NOT NULL REFERENCES harness_candidates(id),
+                prior_candidate_id TEXT REFERENCES harness_candidates(id),
+                evaluation_id INTEGER REFERENCES harness_evaluations(id),
+                evidence_ref TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE TRIGGER IF NOT EXISTS harness_candidates_no_update BEFORE UPDATE ON harness_candidates BEGIN SELECT RAISE(ABORT, 'harness candidates are immutable'); END;
+            CREATE TRIGGER IF NOT EXISTS harness_candidates_no_delete BEFORE DELETE ON harness_candidates BEGIN SELECT RAISE(ABORT, 'harness candidates are immutable'); END;
+            CREATE TRIGGER IF NOT EXISTS harness_evaluations_no_update BEFORE UPDATE ON harness_evaluations BEGIN SELECT RAISE(ABORT, 'harness evaluations are immutable'); END;
+            CREATE TRIGGER IF NOT EXISTS harness_evaluations_no_delete BEFORE DELETE ON harness_evaluations BEGIN SELECT RAISE(ABORT, 'harness evaluations are immutable'); END;
+            CREATE TRIGGER IF NOT EXISTS harness_eval_audit_no_update BEFORE UPDATE ON harness_eval_audit BEGIN SELECT RAISE(ABORT, 'harness audit is immutable'); END;
+            CREATE TRIGGER IF NOT EXISTS harness_eval_audit_no_delete BEFORE DELETE ON harness_eval_audit BEGIN SELECT RAISE(ABORT, 'harness audit is immutable'); END;
 
             CREATE INDEX IF NOT EXISTS idx_sessions_state ON sessions(state);
             CREATE INDEX IF NOT EXISTS idx_tool_log_session ON tool_log(session_id);
@@ -5067,6 +5126,92 @@ fn overlap_state_priority(state: &SessionState) -> u8 {
     }
 }
 
+impl StateStore {
+    pub fn record_harness_candidate(&self, candidate: &CandidateSpec) -> Result<()> {
+        candidate.verify_integrity()?;
+        let existing: Option<(String, String, String)> = self.conn.query_row(
+            "SELECT canonical_config_json, trace_refs_json, evidence_refs_json FROM harness_candidates WHERE id = ?1",
+            [&candidate.id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        ).optional()?;
+        let trace_json = serde_json::to_string(&candidate.trace_refs)?;
+        let evidence_json = serde_json::to_string(&candidate.evidence_refs)?;
+        if let Some(existing) = existing {
+            if existing != (candidate.canonical_config.clone(), trace_json, evidence_json) {
+                anyhow::bail!("candidate id already exists with different immutable content or references");
+            }
+            return Ok(());
+        }
+        self.conn.execute(
+            "INSERT INTO harness_candidates (id, canonical_config_json, trace_refs_json, evidence_refs_json, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![candidate.id, candidate.canonical_config, trace_json, evidence_json, chrono::Utc::now().to_rfc3339()],
+        )?;
+        Ok(())
+    }
+
+    pub fn activate_initial_harness(&self, candidate_id: &str, evidence_ref: &str) -> Result<()> {
+        if candidate_id.len() != 64 || evidence_ref.trim().is_empty() || evidence_ref.len() > 4096 { anyhow::bail!("valid candidate id and bounded activation evidence reference are required"); }
+        let tx = self.conn.unchecked_transaction()?;
+        if tx.query_row("SELECT candidate_id FROM active_harness_config WHERE slot = 'default'", [], |row| row.get::<_, String>(0)).optional()?.is_some() {
+            anyhow::bail!("an active harness configuration already exists");
+        }
+        let now = chrono::Utc::now().to_rfc3339();
+        tx.execute("INSERT INTO active_harness_config (slot, candidate_id, updated_at) VALUES ('default', ?1, ?2)", rusqlite::params![candidate_id, now])?;
+        tx.execute("INSERT INTO harness_eval_audit (event_type, candidate_id, evidence_ref, created_at) VALUES ('initial_activation', ?1, ?2, ?3)", rusqlite::params![candidate_id, evidence_ref, now])?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    #[cfg(test)]
+    pub fn active_harness_id(&self) -> Result<Option<String>> {
+        Ok(self.conn.query_row("SELECT candidate_id FROM active_harness_config WHERE slot = 'default'", [], |row| row.get(0)).optional()?)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn evaluate_promote_and_health_check<F>(&self, candidate_id: &str, baseline_id: &str, evaluator: &str, samples: &[PairedSample], policy: PromotionPolicy, evidence_ref: &str, health_check: F) -> Result<HarnessPromotionOutcome>
+    where F: FnOnce(&str) -> Result<bool> {
+        if candidate_id.len() != 64 || baseline_id.len() != 64 || evaluator != "recorded-v1" || evidence_ref.trim().is_empty() || evidence_ref.len() > 4096 { anyhow::bail!("valid candidate ids, recorded-v1 evaluator, and bounded evidence reference are required"); }
+        let comparison = policy.compare(samples)?;
+        let tx = self.conn.unchecked_transaction()?;
+        let active: String = tx.query_row("SELECT candidate_id FROM active_harness_config WHERE slot = 'default'", [], |row| row.get(0)).context("no active baseline configuration")?;
+        if active != baseline_id { anyhow::bail!("baseline is not the active harness configuration"); }
+        let now = chrono::Utc::now().to_rfc3339();
+        tx.execute("INSERT INTO harness_evaluations (candidate_id, baseline_id, evaluator, samples_json, policy_json, comparison_json, evidence_ref, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)", rusqlite::params![candidate_id, baseline_id, evaluator, serde_json::to_string(samples)?, serde_json::to_string(&policy)?, serde_json::to_string(&comparison)?, evidence_ref, now])?;
+        let evaluation_id = tx.last_insert_rowid();
+        if !comparison.passed {
+            tx.execute("INSERT INTO harness_eval_audit (event_type, candidate_id, prior_candidate_id, evaluation_id, evidence_ref, created_at) VALUES ('promotion_rejected', ?1, ?2, ?3, ?4, ?5)", rusqlite::params![candidate_id, baseline_id, evaluation_id, evidence_ref, now])?;
+            tx.commit()?;
+            return Ok(HarnessPromotionOutcome { evaluation_id: Some(evaluation_id), promoted: false, rolled_back: false, failures: comparison.failures });
+        }
+        let changed = tx.execute("UPDATE active_harness_config SET candidate_id = ?1, updated_at = ?2 WHERE slot = 'default' AND candidate_id = ?3", rusqlite::params![candidate_id, now, baseline_id])?;
+        if changed != 1 { anyhow::bail!("atomic promotion compare-and-swap failed"); }
+        let health_result = health_check(candidate_id);
+        let healthy = matches!(health_result, Ok(true));
+        let event_type = match &health_result { Ok(true) => "promoted", Ok(false) => "promotion_rolled_back", Err(_) => "health_check_error_rolled_back" };
+        if !healthy {
+            let restored = tx.execute("UPDATE active_harness_config SET candidate_id = ?1, updated_at = ?2 WHERE slot = 'default' AND candidate_id = ?3", rusqlite::params![baseline_id, now, candidate_id])?;
+            if restored != 1 { anyhow::bail!("atomic rollback compare-and-swap failed"); }
+        }
+        tx.execute("INSERT INTO harness_eval_audit (event_type, candidate_id, prior_candidate_id, evaluation_id, evidence_ref, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)", rusqlite::params![event_type, candidate_id, baseline_id, evaluation_id, evidence_ref, now])?;
+        tx.commit()?;
+        let failures = match health_result {
+            Ok(true) => Vec::new(),
+            Ok(false) => vec!["post-promotion health check returned false".to_string()],
+            Err(error) => vec![format!("health check error: {error:#}")],
+        };
+        Ok(HarnessPromotionOutcome { evaluation_id: Some(evaluation_id), promoted: healthy, rolled_back: !healthy, failures })
+    }
+
+    pub fn harness_audit_entries(&self) -> Result<Vec<HarnessAuditEntry>> {
+        let mut statement = self.conn.prepare("SELECT id, event_type, candidate_id, prior_candidate_id, evaluation_id, evidence_ref, created_at FROM harness_eval_audit ORDER BY id")?;
+        let entries = statement.query_map([], |row| Ok(HarnessAuditEntry { id: row.get(0)?, event_type: row.get(1)?, candidate_id: row.get(2)?, prior_candidate_id: row.get(3)?, evaluation_id: row.get(4)?, evidence_ref: row.get(5)?, created_at: row.get(6)? }))?.collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(entries)
+    }
+
+    #[cfg(test)]
+    fn connection_for_test(&self) -> &Connection { &self.conn }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -7108,6 +7253,106 @@ mod tests {
         let recovered = db.daemon_activity()?;
         assert_eq!(recovered.chronic_saturation_streak, 0);
 
+        Ok(())
+    }
+
+    #[test]
+    fn harness_eval_store_promotes_and_rolls_back_with_immutable_audit() -> Result<()> {
+        use crate::harness_eval::{CandidateSpec, PairedSample, PromotionPolicy};
+        use serde_json::json;
+        let tempdir = TestDir::new("store-harness-eval")?;
+        let db = StateStore::open(&tempdir.path().join("state.db"))?;
+        let baseline = CandidateSpec::new(json!({"prompt": "baseline"}), vec!["trace://b".into()], vec!["evidence://b".into()])?;
+        let candidate = CandidateSpec::new(json!({"prompt": "candidate"}), vec!["trace://c".into()], vec!["evidence://c".into()])?;
+        db.record_harness_candidate(&baseline)?;
+        db.record_harness_candidate(&candidate)?;
+        db.activate_initial_harness(&baseline.id, "evidence://bootstrap")?;
+
+        let samples = vec![
+            PairedSample { seed: 1, candidate_score: 0.9, baseline_score: 0.5 },
+            PairedSample { seed: 2, candidate_score: 0.8, baseline_score: 0.5 },
+        ];
+        let policy = PromotionPolicy { min_samples: 2, min_mean_delta: 0.1, min_win_rate: 1.0 };
+        let outcome = db.evaluate_promote_and_health_check(&candidate.id, &baseline.id, "recorded-v1", &samples, policy, "evidence://run", |_| Ok(false))?;
+
+        assert!(outcome.rolled_back);
+        assert_eq!(
+            outcome.failures,
+            vec!["post-promotion health check returned false"]
+        );
+        assert_eq!(db.active_harness_id()?.as_deref(), Some(baseline.id.as_str()));
+        let audit = db.harness_audit_entries()?;
+        assert_eq!(audit.iter().map(|entry| entry.event_type.as_str()).collect::<Vec<_>>(), vec!["initial_activation", "promotion_rolled_back"]);
+        assert!(db.connection_for_test().execute("UPDATE harness_eval_audit SET event_type = 'tampered'", []).is_err());
+        assert!(db.connection_for_test().execute("DELETE FROM harness_candidates", []).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn harness_eval_health_callback_error_is_reported_and_rolled_back() -> Result<()> {
+        use crate::harness_eval::{CandidateSpec, PairedSample, PromotionPolicy};
+        use serde_json::json;
+        let tempdir = TestDir::new("store-harness-health-error")?;
+        let db = StateStore::open(&tempdir.path().join("state.db"))?;
+        let baseline = CandidateSpec::new(json!({"v": 1}), vec!["trace://b".into()], vec!["evidence://b".into()])?;
+        let candidate = CandidateSpec::new(json!({"v": 2}), vec!["trace://c".into()], vec!["evidence://c".into()])?;
+        db.record_harness_candidate(&baseline)?;
+        db.record_harness_candidate(&candidate)?;
+        db.activate_initial_harness(&baseline.id, "evidence://bootstrap")?;
+
+        let outcome = db.evaluate_promote_and_health_check(
+            &candidate.id,
+            &baseline.id,
+            "recorded-v1",
+            &[PairedSample { seed: 1, candidate_score: 0.9, baseline_score: 0.5 }],
+            PromotionPolicy { min_samples: 1, min_mean_delta: 0.4, min_win_rate: 1.0 },
+            "evidence://run",
+            |_| anyhow::bail!("probe unavailable"),
+        )?;
+
+        assert!(outcome.rolled_back);
+        assert_eq!(outcome.failures, vec!["health check error: probe unavailable"]);
+        assert_eq!(db.active_harness_id()?.as_deref(), Some(baseline.id.as_str()));
+        assert_eq!(db.harness_audit_entries()?.last().unwrap().event_type, "health_check_error_rolled_back");
+        Ok(())
+    }
+
+    #[test]
+    fn harness_eval_failed_gate_never_changes_active_configuration() -> Result<()> {
+        use crate::harness_eval::{CandidateSpec, PairedSample, PromotionPolicy};
+        use serde_json::json;
+        let tempdir = TestDir::new("store-harness-gate")?;
+        let db = StateStore::open(&tempdir.path().join("state.db"))?;
+        let baseline = CandidateSpec::new(json!({"v": 1}), vec!["trace://b".into()], vec!["evidence://b".into()])?;
+        let candidate = CandidateSpec::new(json!({"v": 2}), vec!["trace://c".into()], vec!["evidence://c".into()])?;
+        db.record_harness_candidate(&baseline)?;
+        db.record_harness_candidate(&candidate)?;
+        db.activate_initial_harness(&baseline.id, "evidence://bootstrap")?;
+        let outcome = db.evaluate_promote_and_health_check(&candidate.id, &baseline.id, "recorded-v1", &[PairedSample { seed: 1, candidate_score: 0.6, baseline_score: 0.5 }], PromotionPolicy { min_samples: 2, min_mean_delta: 0.0, min_win_rate: 0.0 }, "evidence://run", |_| Ok(true))?;
+        assert!(!outcome.promoted);
+        assert_eq!(db.active_harness_id()?.as_deref(), Some(baseline.id.as_str()));
+        assert_eq!(db.harness_audit_entries()?.last().unwrap().event_type, "promotion_rejected");
+        Ok(())
+    }
+
+    #[test]
+    fn harness_eval_successful_promotion_is_persisted() -> Result<()> {
+        use crate::harness_eval::{CandidateSpec, PairedSample, PromotionPolicy};
+        use serde_json::json;
+        let tempdir = TestDir::new("store-harness-success")?;
+        let db_path = tempdir.path().join("state.db");
+        let db = StateStore::open(&db_path)?;
+        let baseline = CandidateSpec::new(json!({"v": 1}), vec!["trace://b".into()], vec!["evidence://b".into()])?;
+        let candidate = CandidateSpec::new(json!({"v": 2}), vec!["trace://c".into()], vec!["evidence://c".into()])?;
+        db.record_harness_candidate(&baseline)?;
+        db.record_harness_candidate(&candidate)?;
+        db.activate_initial_harness(&baseline.id, "evidence://bootstrap")?;
+        let outcome = db.evaluate_promote_and_health_check(&candidate.id, &baseline.id, "recorded-v1", &[PairedSample { seed: 1, candidate_score: 0.9, baseline_score: 0.5 }], PromotionPolicy { min_samples: 1, min_mean_delta: 0.4, min_win_rate: 1.0 }, "evidence://run", |_| Ok(true))?;
+        assert!(outcome.promoted);
+        drop(db);
+        let reopened = StateStore::open(&db_path)?;
+        assert_eq!(reopened.active_harness_id()?.as_deref(), Some(candidate.id.as_str()));
+        assert_eq!(reopened.harness_audit_entries()?.last().unwrap().event_type, "promoted");
         Ok(())
     }
 }

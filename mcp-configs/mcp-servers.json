@@ -8,7 +8,7 @@
     "ito-compute": {
       "command": "node",
       "args": ["/absolute/path/to/ito-cloud-runtime/cli/ito-compute-cli/dist/bin/ito-mcp.js"],
-      "description": "Opt-in local Itô compute MCP. The canonical package is unpublished and must be built from Ito-Markets/ito-cloud-runtime/cli/ito-compute-cli. Exposes only ito_auth, ito_find, and ito_status; inject ITO_API_KEY from the launching environment."
+      "description": "Opt-in local Itô compute MCP. The canonical package is unpublished and must be built from Ito-Markets/ito-cloud-runtime/cli/ito-compute-cli. Exposes only ito_auth, ito_find, and ito_status. Authentication delegates to canonical CLI device authorization, which opens the Itô verification page by default and persists a device token in macOS Keychain; ecc ito auth --no-browser suppresses the CLI page handoff. ECC itself performs no browser automation. Legacy ITO_API_KEY requires explicit ITO_AUTH_MODE=legacy."
     },
     "jira": {
       "command": "uvx",

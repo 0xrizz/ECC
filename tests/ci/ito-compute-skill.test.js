@@ -57,6 +57,11 @@ function main() {
       assert.match(skill, /ECC_ITO_CLI_EXECUTABLE/);
       assert.match(skill, /explicit absolute built entry/);
       assert.match(skill, /never discovers[^\n]*through `PATH`/);
+      assert.match(skill, /opens the Itô verification page\s+by default/i);
+      assert.match(skill, /--no-browser/);
+      assert.match(skill, /macOS Keychain/i);
+      assert.match(skill, /ITO_AUTH_MODE=legacy/);
+      assert.match(skill, /ECC (?:itself )?(?:does|performs) no browser automation/i);
       assert.match(skill, /ITO_ENABLE_SIXTYTWO_LIVE/);
       assert.match(skill, /sixtytwo-cli==0\.3\.33/);
       assert.match(skill, /explicit node/i);
@@ -106,6 +111,9 @@ function main() {
       assert.doesNotMatch(JSON.stringify(server), /npx|ito_lock|ito_run|paper|simulat/i);
       assert.match(server.description, /ito_auth, ito_find, and ito_status/);
       assert.match(server.description, /unpublished/i);
+      assert.match(server.description, /device authorization/i);
+      assert.match(server.description, /macOS Keychain/i);
+      assert.match(server.description, /no browser automation/i);
     }],
   ];
 

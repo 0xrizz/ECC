@@ -28,15 +28,18 @@ function showHelp() {
 ECC × Itô local CLI bridge
 
 Usage:
-  ecc ito auth
+  ecc ito auth [--no-browser]
   ecc ito find <all required RFQ options>
   ecc ito status
   ecc ito evals --cluster <id> --live-sixtytwo --nodes <list> --config-dir <dir>
   ecc ito <auth|find|status|evals> --json
 
 The bridge invokes the separately installed canonical Itô CLI and returns its
-real stdout, stderr, and exit code unchanged. It performs no browser navigation
-and adds no lock, workload, inference, or purchase path.
+real stdout, stderr, and exit code unchanged. "ecc ito auth" delegates to the
+canonical CLI's device authorization. It opens the Itô verification page by default
+and persists its device token in macOS Keychain. Pass --no-browser to
+suppress that handoff. ECC itself performs no browser automation and adds no
+lock, workload, inference, or purchase path.
 
 Important:
   - "find" reads live inventory and submits an authenticated RFQ.
@@ -67,9 +70,9 @@ The same package's MCP server exposes only:
 Configure the MCP command as "node" with this absolute argument:
   /absolute/path/to/ito-cloud-runtime/${CANONICAL_PACKAGE_PATH}/dist/bin/ito-mcp.js
 
-For auth, find, and status, inject ITO_API_KEY into the child process from
-1Password or the launching environment. Never put the key in arguments,
-tracked files, or chat.
+Device authorization is the default. Legacy ITO_API_KEY authentication is
+forwarded only with explicit ITO_AUTH_MODE=legacy. Never put a key or token in
+arguments, tracked files, or chat.
 
 Live node qualification requires ITO_ENABLE_SIXTYTWO_LIVE=1,
 --live-sixtytwo, an explicit node list, and an existing absolute config

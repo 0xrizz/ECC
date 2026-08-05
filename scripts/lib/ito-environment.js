@@ -27,6 +27,9 @@ const ITO_RUNTIME_ENVIRONMENT_KEYS = Object.freeze([
   "ITO_API_KEY",
   "ITO_API_URL",
   "ITO_INVENTORY_URL",
+  "ITO_AUTH_MODE",
+  "ITO_ALLOW_FILE_TOKEN",
+  "ITO_TOKEN_FILE",
 ]);
 
 const ITO_EVAL_ENVIRONMENT_KEYS = Object.freeze([
@@ -61,6 +64,7 @@ function createSafeItoEnvironment(source = process.env, options = {}) {
 
   if (options.includeItoRuntime) {
     for (const key of ITO_RUNTIME_ENVIRONMENT_KEYS) {
+      if (key === "ITO_API_KEY" && source.ITO_AUTH_MODE !== "legacy") continue;
       copyDefined(source, safe, key);
     }
   }

@@ -21,6 +21,7 @@ const {
 const {
   createSafeItoInvocationEnvironment,
   getInvocationCommand,
+  ITO_RUNTIME_ENVIRONMENT_KEYS,
 } = require("../../scripts/lib/ito-environment");
 
 function runCli(args, environment = {}) {
@@ -103,6 +104,18 @@ function main() {
         }
       }
     }],
+    ["forwards the canonical auth browser opt-out without performing browser automation", () => {
+      const probe = makeItoProbe();
+      try {
+        const result = runCli(["ito", "auth", "--no-browser"], {
+          ECC_ITO_CLI_EXECUTABLE: probe.executable,
+        });
+        assert.strictEqual(result.status, 0, result.stderr);
+        assert.deepStrictEqual(readInvocation(probe).argv, ["auth", "--no-browser"]);
+      } finally {
+        fs.rmSync(probe.directory, { recursive: true, force: true });
+      }
+    }],
     ["normalizes JSON and forwards every RFQ constraint without interpretation", () => {
       const probe = makeItoProbe();
       try {
@@ -135,12 +148,15 @@ function main() {
         fs.rmSync(probe.directory, { recursive: true, force: true });
       }
     }],
-    ["passes only the required Itô runtime settings across the process boundary", () => {
+    ["passes only the required device-auth runtime settings across the process boundary", () => {
       const probe = makeItoProbe();
       try {
         const result = runCli(["ito", "auth"], {
           ECC_ITO_CLI_EXECUTABLE: probe.executable,
-          ITO_API_KEY: "ito_test_key",
+          ITO_API_KEY: "must-not-cross-without-legacy-mode",
+          ITO_AUTH_MODE: "device",
+          ITO_ALLOW_FILE_TOKEN: "1",
+          ITO_TOKEN_FILE: "/tmp/ito-device-token",
           ITO_API_URL: "https://compute.example.test",
           ITO_INVENTORY_URL: "https://edge.example.test",
           AWS_SECRET_ACCESS_KEY: "must-not-cross",
@@ -149,7 +165,10 @@ function main() {
         });
         assert.strictEqual(result.status, 0, result.stderr);
         const childEnvironment = readInvocation(probe).env;
-        assert.strictEqual(childEnvironment.ITO_API_KEY, "ito_test_key");
+        assert.strictEqual(childEnvironment.ITO_API_KEY, undefined);
+        assert.strictEqual(childEnvironment.ITO_AUTH_MODE, "device");
+        assert.strictEqual(childEnvironment.ITO_ALLOW_FILE_TOKEN, "1");
+        assert.strictEqual(childEnvironment.ITO_TOKEN_FILE, "/tmp/ito-device-token");
         assert.strictEqual(childEnvironment.ITO_API_URL, "https://compute.example.test");
         assert.strictEqual(childEnvironment.ITO_INVENTORY_URL, "https://edge.example.test");
         assert.strictEqual(childEnvironment.AWS_SECRET_ACCESS_KEY, undefined);
@@ -158,6 +177,26 @@ function main() {
         assert.strictEqual(childEnvironment.ECC_ITO_CLI_EXECUTABLE, undefined);
       } finally {
         fs.rmSync(probe.directory, { recursive: true, force: true });
+      }
+    }],
+    ["forwards the legacy API key only with explicit legacy auth mode", () => {
+      for (const [mode, expectedKey] of [
+        [undefined, undefined],
+        ["device", undefined],
+        ["legacy", "ito_test_key"],
+      ]) {
+        const probe = makeItoProbe();
+        try {
+          const result = runCli(["ito", "status"], {
+            ECC_ITO_CLI_EXECUTABLE: probe.executable,
+            ITO_API_KEY: "ito_test_key",
+            ...(mode ? { ITO_AUTH_MODE: mode } : {}),
+          });
+          assert.strictEqual(result.status, 0, result.stderr);
+          assert.strictEqual(readInvocation(probe).env.ITO_API_KEY, expectedKey);
+        } finally {
+          fs.rmSync(probe.directory, { recursive: true, force: true });
+        }
       }
     }],
     ["isolates live node qualification from Itô and unrelated credentials", () => {
@@ -176,6 +215,9 @@ function main() {
         ], {
           ECC_ITO_CLI_EXECUTABLE: probe.executable,
           ITO_API_KEY: "must-not-cross-into-node-qualification",
+          ITO_AUTH_MODE: "legacy",
+          ITO_ALLOW_FILE_TOKEN: "1",
+          ITO_TOKEN_FILE: "/tmp/must-not-cross-token-file",
           ITO_API_URL: "https://compute.example.test",
           ITO_INVENTORY_URL: "https://edge.example.test",
           ITO_ENABLE_SIXTYTWO_LIVE: "1",
@@ -201,6 +243,9 @@ function main() {
         assert.strictEqual(invocation.env.SIXTYTWO_TOKEN, "sixtytwo-legacy-test-token");
         assert.strictEqual(invocation.env.SSH_AUTH_SOCK, "/tmp/ecc-test-agent.sock");
         assert.strictEqual(invocation.env.ITO_API_KEY, undefined);
+        assert.strictEqual(invocation.env.ITO_AUTH_MODE, undefined);
+        assert.strictEqual(invocation.env.ITO_ALLOW_FILE_TOKEN, undefined);
+        assert.strictEqual(invocation.env.ITO_TOKEN_FILE, undefined);
         assert.strictEqual(invocation.env.ITO_API_URL, undefined);
         assert.strictEqual(invocation.env.ITO_INVENTORY_URL, undefined);
         assert.strictEqual(invocation.env.ITO_CLI_DEMO, undefined);
@@ -310,6 +355,14 @@ function main() {
       }
     }],
     ["classifies Itō child environments once and fails closed on unknown prefixes", () => {
+      assert.deepStrictEqual(ITO_RUNTIME_ENVIRONMENT_KEYS, [
+        "ITO_API_KEY",
+        "ITO_API_URL",
+        "ITO_INVENTORY_URL",
+        "ITO_AUTH_MODE",
+        "ITO_ALLOW_FILE_TOKEN",
+        "ITO_TOKEN_FILE",
+      ]);
       const safe = createSafeItoInvocationEnvironment(
         {
           PATH: process.env.PATH,
@@ -338,7 +391,7 @@ function main() {
       );
     }],
     ["rejects unsupported browser, paper, and execution operations before spawning", () => {
-      for (const command of ["rent", "lock", "run", "inference", "mcp"]) {
+      for (const command of ["rent", "lock", "purchase", "run", "inference", "mcp"]) {
         const probe = makeItoProbe();
         try {
           const result = runCli(["ito", command], {
@@ -510,14 +563,14 @@ function main() {
         fs.rmSync(probe.directory, { recursive: true, force: true });
       }
     }],
-    ["help exposes the truthful CLI and MCP surface without a browser path", () => {
+    ["help exposes canonical device auth without claiming ECC browser automation", () => {
       const probe = makeItoProbe();
       try {
         const result = runCli(["ito", "--help"], {
           ECC_ITO_CLI_EXECUTABLE: probe.executable,
         });
         assert.strictEqual(result.status, 0, result.stderr);
-        assert.match(result.stdout, /ecc ito auth/);
+        assert.match(result.stdout, /ecc ito auth \[--no-browser\]/);
         assert.match(result.stdout, /ecc ito find/);
         assert.match(result.stdout, /ecc ito status/);
         assert.match(result.stdout, /ecc ito evals/);
@@ -528,9 +581,14 @@ function main() {
         assert.match(result.stdout, new RegExp(CANONICAL_PACKAGE.replaceAll("/", "\\/")));
         assert.match(result.stdout, /unpublished/i);
         assert.match(result.stdout, /never discovers[^\n]*through PATH/i);
+        assert.match(result.stdout, /device authorization/i);
+        assert.match(result.stdout, /opens the Itô verification page by default/i);
+        assert.match(result.stdout, /macOS Keychain/i);
+        assert.match(result.stdout, /ECC itself performs no browser automation/i);
+        assert.match(result.stdout, /ITO_AUTH_MODE=legacy/);
         assert.doesNotMatch(
           result.stdout,
-          /manual copy|open(?:s)? (?:a )?browser|ito_lock|ito_run|npm link|paper|simulat/i
+          /manual copy|ito_lock|ito_run|npm link|paper|simulat/i
         );
         assert.ok(!fs.existsSync(probe.log));
       } finally {
