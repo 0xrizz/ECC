@@ -447,25 +447,37 @@ enum Commands {
 enum HarnessEvalCommands {
     /// Record an immutable content-addressed candidate from a local JSON file
     Record {
-        #[arg(long)] config: PathBuf,
-        #[arg(long = "trace-ref", required = true)] trace_refs: Vec<String>,
-        #[arg(long = "evidence-ref", required = true)] evidence_refs: Vec<String>,
+        #[arg(long)]
+        config: PathBuf,
+        #[arg(long = "trace-ref", required = true)]
+        trace_refs: Vec<String>,
+        #[arg(long = "evidence-ref", required = true)]
+        evidence_refs: Vec<String>,
     },
     /// Set the first baseline; subsequent changes require evaluation
     ActivateInitial {
         candidate_id: String,
-        #[arg(long)] evidence_ref: String,
+        #[arg(long)]
+        evidence_ref: String,
     },
     /// Evaluate paired scores and conditionally promote with a health gate
     Run {
-        #[arg(long)] candidate: String,
-        #[arg(long)] baseline: String,
-        #[arg(long = "seed", required = true)] seeds: Vec<u64>,
-        #[arg(long)] measurements: PathBuf,
-        #[arg(long)] evidence_ref: String,
-        #[arg(long)] min_samples: usize,
-        #[arg(long)] min_mean_delta: f64,
-        #[arg(long)] min_win_rate: f64,
+        #[arg(long)]
+        candidate: String,
+        #[arg(long)]
+        baseline: String,
+        #[arg(long = "seed", required = true)]
+        seeds: Vec<u64>,
+        #[arg(long)]
+        measurements: PathBuf,
+        #[arg(long)]
+        evidence_ref: String,
+        #[arg(long)]
+        min_samples: usize,
+        #[arg(long)]
+        min_mean_delta: f64,
+        #[arg(long)]
+        min_win_rate: f64,
     },
     /// Show append-only promotion audit entries
     Audit,
@@ -1423,30 +1435,72 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Some(Commands::HarnessEval { command }) => match command {
-            HarnessEvalCommands::Record { config, trace_refs, evidence_refs } => {
-                let value: serde_json::Value = serde_json::from_slice(&read_bounded_file(&config, 1_048_576, "candidate configuration")?)
-                    .with_context(|| format!("Invalid JSON in {}", config.display()))?;
+            HarnessEvalCommands::Record {
+                config,
+                trace_refs,
+                evidence_refs,
+            } => {
+                let value: serde_json::Value = serde_json::from_slice(&read_bounded_file(
+                    &config,
+                    1_048_576,
+                    "candidate configuration",
+                )?)
+                .with_context(|| format!("Invalid JSON in {}", config.display()))?;
                 let candidate = harness_eval::CandidateSpec::new(value, trace_refs, evidence_refs)?;
                 db.record_harness_candidate(&candidate)?;
                 println!("{}", candidate.id);
             }
-            HarnessEvalCommands::ActivateInitial { candidate_id, evidence_ref } => {
+            HarnessEvalCommands::ActivateInitial {
+                candidate_id,
+                evidence_ref,
+            } => {
                 db.activate_initial_harness(&candidate_id, &evidence_ref)?;
                 println!("Activated initial baseline: {candidate_id}");
             }
-            HarnessEvalCommands::Run { candidate, baseline, seeds, measurements, evidence_ref, min_samples, min_mean_delta, min_win_rate } => {
+            HarnessEvalCommands::Run {
+                candidate,
+                baseline,
+                seeds,
+                measurements,
+                evidence_ref,
+                min_samples,
+                min_mean_delta,
+                min_win_rate,
+            } => {
                 use harness_eval::Evaluator;
-                let evidence: harness_eval::RecordedEvidence = serde_json::from_slice(&read_bounded_file(&measurements, 8_388_608, "recorded measurements")?)
-                    .with_context(|| format!("Invalid recorded evidence in {}", measurements.display()))?;
+                let evidence: harness_eval::RecordedEvidence = serde_json::from_slice(
+                    &read_bounded_file(&measurements, 8_388_608, "recorded measurements")?,
+                )
+                .with_context(|| {
+                    format!("Invalid recorded evidence in {}", measurements.display())
+                })?;
                 let mut evaluator = harness_eval::RecordedEvaluator::from_evidence(evidence)?;
                 let evaluator_name = evaluator.name().to_string();
-                let samples = harness_eval::evaluate_paired(&mut evaluator, &candidate, &baseline, &seeds)?;
-                let policy = harness_eval::PromotionPolicy { min_samples, min_mean_delta, min_win_rate };
-                let outcome = db.evaluate_promote_and_health_check(&candidate, &baseline, &evaluator_name, &samples, policy, &evidence_ref, |id| evaluator.health_check(id))?;
+                let health_evidence = evaluator.health_evidence_snapshot()?;
+                let samples =
+                    harness_eval::evaluate_paired(&mut evaluator, &candidate, &baseline, &seeds)?;
+                let policy = harness_eval::PromotionPolicy {
+                    min_samples,
+                    min_mean_delta,
+                    min_win_rate,
+                };
+                let outcome = db.evaluate_promote_and_health_check(
+                    &candidate,
+                    &baseline,
+                    &evaluator_name,
+                    &samples,
+                    policy,
+                    &evidence_ref,
+                    &health_evidence,
+                    |id| evaluator.health_check(id),
+                )?;
                 println!("{}", serde_json::to_string_pretty(&outcome)?);
             }
             HarnessEvalCommands::Audit => {
-                println!("{}", serde_json::to_string_pretty(&db.harness_audit_entries()?)?);
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&db.harness_audit_entries()?)?
+                );
             }
         },
         Some(Commands::Dashboard) | None => {
@@ -8628,18 +8682,51 @@ mod tests {
     #[test]
     fn harness_eval_cli_requires_explicit_bounded_inputs() {
         let cli = Cli::try_parse_from([
-            "ecc", "harness-eval", "run", "--candidate", "candidate", "--baseline", "baseline",
-            "--seed", "1", "--seed", "2", "--measurements", "scores.json", "--evidence-ref",
-            "evidence://run", "--min-samples", "2", "--min-mean-delta", "0.1", "--min-win-rate", "0.5",
-        ]).expect("valid harness evaluation command");
+            "ecc",
+            "harness-eval",
+            "run",
+            "--candidate",
+            "candidate",
+            "--baseline",
+            "baseline",
+            "--seed",
+            "1",
+            "--seed",
+            "2",
+            "--measurements",
+            "scores.json",
+            "--evidence-ref",
+            "evidence://run",
+            "--min-samples",
+            "2",
+            "--min-mean-delta",
+            "0.1",
+            "--min-win-rate",
+            "0.5",
+        ])
+        .expect("valid harness evaluation command");
         match cli.command {
-            Some(Commands::HarnessEval { command: HarnessEvalCommands::Run { seeds, min_samples, .. } }) => {
+            Some(Commands::HarnessEval {
+                command:
+                    HarnessEvalCommands::Run {
+                        seeds, min_samples, ..
+                    },
+            }) => {
                 assert_eq!(seeds, vec![1, 2]);
                 assert_eq!(min_samples, 2);
             }
             other => panic!("unexpected command: {other:?}"),
         }
-        assert!(Cli::try_parse_from(["ecc", "harness-eval", "run", "--candidate", "c", "--baseline", "b"]).is_err());
+        assert!(Cli::try_parse_from([
+            "ecc",
+            "harness-eval",
+            "run",
+            "--candidate",
+            "c",
+            "--baseline",
+            "b"
+        ])
+        .is_err());
     }
 
     #[test]

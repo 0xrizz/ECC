@@ -5,22 +5,93 @@ mod tests {
     use std::collections::BTreeMap;
 
     #[test]
-    fn candidate_id_is_content_addressed_over_canonical_json() {
+    fn candidate_id_addresses_canonical_config_and_normalized_references() {
         let first = CandidateSpec::new(
             json!({"model": "fixed", "limits": {"steps": 3, "tools": ["read"]}}),
-            vec!["trace://one".into()],
-            vec!["evidence://one".into()],
+            vec![" trace://two ".into(), "trace://one".into()],
+            vec!["evidence://two".into(), " evidence://one ".into()],
         )
         .unwrap();
         let second = CandidateSpec::new(
             json!({"limits": {"tools": ["read"], "steps": 3}, "model": "fixed"}),
-            vec!["trace://two".into()],
-            vec!["evidence://two".into()],
+            vec!["trace://one".into(), "trace://two".into()],
+            vec!["evidence://one".into(), "evidence://two".into()],
         )
         .unwrap();
 
         assert_eq!(first.id, second.id);
         assert_eq!(first.canonical_config, second.canonical_config);
+        assert_eq!(first.trace_refs, vec!["trace://one", "trace://two"]);
+        assert_eq!(
+            first.evidence_refs,
+            vec!["evidence://one", "evidence://two"]
+        );
+    }
+
+    #[test]
+    fn candidate_id_changes_when_any_immutable_reference_changes() {
+        let original = CandidateSpec::new(
+            json!({"model": "fixed"}),
+            vec!["trace://one".into()],
+            vec!["evidence://one".into()],
+        )
+        .unwrap();
+        let changed_trace = CandidateSpec::new(
+            json!({"model": "fixed"}),
+            vec!["trace://two".into()],
+            vec!["evidence://one".into()],
+        )
+        .unwrap();
+        let changed_evidence = CandidateSpec::new(
+            json!({"model": "fixed"}),
+            vec!["trace://one".into()],
+            vec!["evidence://two".into()],
+        )
+        .unwrap();
+
+        assert_ne!(original.id, changed_trace.id);
+        assert_ne!(original.id, changed_evidence.id);
+    }
+
+    #[test]
+    fn candidate_integrity_rejects_reference_tampering() {
+        let mut candidate = CandidateSpec::new(
+            json!({"model": "fixed"}),
+            vec!["trace://one".into()],
+            vec!["evidence://one".into()],
+        )
+        .unwrap();
+        candidate.trace_refs = vec!["trace://tampered".into()];
+
+        assert!(candidate.verify_integrity().is_err());
+
+        let mut noncanonical = CandidateSpec::new(
+            json!({"model": "fixed"}),
+            vec!["trace://one".into(), "trace://two".into()],
+            vec!["evidence://one".into()],
+        )
+        .unwrap();
+        noncanonical.trace_refs.reverse();
+        assert!(noncanonical.verify_integrity().is_err());
+    }
+
+    #[test]
+    fn persisted_candidate_integrity_accepts_only_exact_v1_or_v2_ids() {
+        let candidate = CandidateSpec::new(
+            json!({"model": "fixed", "limits": {"steps": 3}}),
+            vec!["trace://one".into()],
+            vec!["evidence://one".into()],
+        )
+        .unwrap();
+        let legacy_id = candidate.legacy_id();
+
+        candidate.verify_persisted_id(&candidate.id).unwrap();
+        candidate.verify_persisted_id(&legacy_id).unwrap();
+        assert!(candidate
+            .verify_persisted_id(&"a".repeat(64))
+            .unwrap_err()
+            .to_string()
+            .contains("content address"));
     }
 
     #[test]
@@ -120,14 +191,18 @@ pub struct CandidateSpec {
 
 impl CandidateSpec {
     pub fn new(config: Value, trace_refs: Vec<String>, evidence_refs: Vec<String>) -> Result<Self> {
-        validate_refs("trace", &trace_refs)?;
-        validate_refs("evidence", &evidence_refs)?;
+        let trace_refs = normalize_refs("trace", trace_refs)?;
+        let evidence_refs = normalize_refs("evidence", evidence_refs)?;
         let canonical_config = serde_json::to_string(&canonicalize(config))?;
         if canonical_config.len() > 1024 * 1024 {
             bail!("candidate configuration exceeds 1 MiB");
         }
-        let digest = Sha256::digest(canonical_config.as_bytes());
-        let id = digest.iter().map(|byte| format!("{byte:02x}")).collect();
+        let artifact = serde_json::to_string(&CanonicalCandidateArtifact {
+            config: serde_json::from_str(&canonical_config)?,
+            trace_refs: &trace_refs,
+            evidence_refs: &evidence_refs,
+        })?;
+        let id = sha256_hex(artifact.as_bytes());
         Ok(Self {
             id,
             canonical_config,
@@ -137,23 +212,71 @@ impl CandidateSpec {
     }
 
     pub fn verify_integrity(&self) -> Result<()> {
-        let value: Value = serde_json::from_str(&self.canonical_config)?;
-        let rebuilt = Self::new(value, self.trace_refs.clone(), self.evidence_refs.clone())?;
-        if rebuilt.id != self.id || rebuilt.canonical_config != self.canonical_config {
+        self.verify_persisted_id(&self.id)?;
+        if self.id != self.id_for_v2()? {
             bail!("candidate content address or canonical configuration is invalid");
         }
         Ok(())
     }
+
+    pub fn legacy_id(&self) -> String {
+        sha256_hex(self.canonical_config.as_bytes())
+    }
+
+    pub fn verify_persisted_id(&self, persisted_id: &str) -> Result<()> {
+        let value: Value = serde_json::from_str(&self.canonical_config)?;
+        let rebuilt = Self::new(value, self.trace_refs.clone(), self.evidence_refs.clone())?;
+        let is_v1 = persisted_id == self.legacy_id();
+        let is_v2 = persisted_id == rebuilt.id;
+        if rebuilt.canonical_config != self.canonical_config
+            || (!is_v1 && !is_v2)
+            || (is_v2
+                && (rebuilt.trace_refs != self.trace_refs
+                    || rebuilt.evidence_refs != self.evidence_refs))
+        {
+            bail!("candidate content address or canonical configuration is invalid");
+        }
+        Ok(())
+    }
+
+    pub(crate) fn id_for_v2(&self) -> Result<String> {
+        Ok(Self::new(
+            serde_json::from_str(&self.canonical_config)?,
+            self.trace_refs.clone(),
+            self.evidence_refs.clone(),
+        )?
+        .id)
+    }
 }
 
-fn validate_refs(kind: &str, refs: &[String]) -> Result<()> {
+#[derive(Serialize)]
+struct CanonicalCandidateArtifact<'a> {
+    config: Value,
+    trace_refs: &'a [String],
+    evidence_refs: &'a [String],
+}
+
+fn normalize_refs(kind: &str, refs: Vec<String>) -> Result<Vec<String>> {
     if refs.is_empty() || refs.iter().any(|reference| reference.trim().is_empty()) {
         bail!("at least one non-empty {kind} reference is required");
     }
     if refs.len() > 100 || refs.iter().any(|reference| reference.len() > 4096) {
         bail!("{kind} references exceed bounded limits");
     }
-    Ok(())
+    let mut normalized = refs
+        .into_iter()
+        .map(|reference| reference.trim().to_string())
+        .collect::<Vec<_>>();
+    normalized.sort();
+    normalized.dedup();
+    Ok(normalized)
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    Sha256::digest(bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
 fn canonicalize(value: Value) -> Value {
@@ -182,6 +305,50 @@ pub struct RecordedEvidence {
     pub evaluator: String,
     pub scores: BTreeMap<String, BTreeMap<u64, f64>>,
     pub health: BTreeMap<String, bool>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HealthEvidenceSnapshot {
+    pub schema_version: u8,
+    pub evaluator: String,
+    pub candidate_id: String,
+    pub asserted_healthy: bool,
+}
+
+impl HealthEvidenceSnapshot {
+    pub fn new(evaluator: &str, candidate_id: &str, asserted_healthy: bool) -> Result<Self> {
+        let snapshot = Self {
+            schema_version: 1,
+            evaluator: evaluator.to_string(),
+            candidate_id: candidate_id.to_string(),
+            asserted_healthy,
+        };
+        snapshot.verify()?;
+        Ok(snapshot)
+    }
+
+    pub fn canonical_json(&self) -> Result<String> {
+        self.verify()?;
+        Ok(serde_json::to_string(self)?)
+    }
+
+    pub fn digest(&self) -> Result<String> {
+        Ok(sha256_hex(self.canonical_json()?.as_bytes()))
+    }
+
+    pub fn verify(&self) -> Result<()> {
+        if self.schema_version != 1
+            || self.evaluator != "recorded-v1"
+            || self.candidate_id.len() != 64
+            || !self
+                .candidate_id
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            bail!("invalid canonical health evidence snapshot");
+        }
+        Ok(())
+    }
 }
 
 pub struct RecordedEvaluator {
@@ -236,6 +403,16 @@ impl RecordedEvaluator {
             health_candidate: Some(health_candidate),
             calls: Vec::new(),
         })
+    }
+
+    pub fn health_evidence_snapshot(&self) -> Result<HealthEvidenceSnapshot> {
+        HealthEvidenceSnapshot::new(
+            &self.name,
+            self.health_candidate
+                .as_deref()
+                .context("candidate-keyed health evidence is required")?,
+            self.health_ok,
+        )
     }
 
     #[cfg(test)]

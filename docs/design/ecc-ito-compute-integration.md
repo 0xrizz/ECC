@@ -24,9 +24,10 @@ ECC delegates to the canonical Itô package in
 `Ito-Markets/ito-cloud-runtime/cli/ito-compute-cli`. ECC does not maintain a
 second API client or response schema.
 
-The wrapper exposes only the canonical CLI's `auth`, `find`, `status`, and `evals`
+The wrapper exposes only the canonical CLI's `login`, `auth`, `find`, `status`, and `evals`
 operations:
 
+    ecc ito login [--no-browser]
     ecc ito auth
     ecc ito find <all required RFQ constraints>
     ecc ito status
@@ -36,11 +37,12 @@ The canonical MCP server exposes only `ito_auth`, `ito_find`, and `ito_status`.
 ECC includes an opt-in configuration template pointing to the local built MCP
 entry. It does not enable the server by default.
 
-The former browser/manual-copy command is retired. `ecc ito auth` delegates to
+The former browser/manual-copy command is retired. `ecc ito login` delegates to
 the canonical CLI's device authorization, which opens the Itô verification page
 by default and persists a device token in macOS Keychain. `--no-browser`
 suppresses that page handoff. ECC itself performs no browser automation and
-stores no economic state.
+stores no economic state. `ecc ito auth` is validation-only, never starts
+device login, and rejects `--no-browser`.
 
 ## Local install
 
@@ -63,15 +65,18 @@ For MCP, configure `node` with:
 
     /absolute/path/to/ito-cloud-runtime/cli/ito-compute-cli/dist/bin/ito-mcp.js
 
-Device authorization is the default. ECC forwards only the required device
-authorization settings, optional Itô endpoint overrides, and the minimum
-process environment. Legacy `ITO_API_KEY` is forwarded only with explicit
-`ITO_AUTH_MODE=legacy`; ECC does not inspect or log it.
+Device login forwards only required authorization settings, optional Itô
+endpoint overrides, and the minimum process environment; it never inherits
+`ITO_API_KEY`. The `auth`, `find`, and `status` commands forward `ITO_API_KEY`
+directly when configured; `ITO_AUTH_MODE=legacy` is not required. Device tokens
+use macOS Keychain by default. Explicit file fallback retains owner-only 0700
+directory and 0600 token-file permissions. ECC does not inspect or log secrets.
 
 ## Authority and economics
 
-- `auth` starts canonical device authorization, with `--no-browser` available
+- `login` starts canonical device authorization, with `--no-browser` available
   when the operator does not want the CLI to open the verification page.
+- `auth` validates existing credentials only.
 - `find` reads live inventory and submits a live authenticated RFQ. An operator
   or agent must gather every hard topology/economic constraint and obtain
   explicit buyer authority before invoking it.
