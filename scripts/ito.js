@@ -21,7 +21,8 @@ const SOURCE_CANONICAL_ENTRY_SEGMENTS = Object.freeze([
   "bin",
   "ito.js",
 ]);
-const NPM_CANONICAL_ENTRY_SEGMENTS = Object.freeze([
+const GLOBAL_NPM_ENTRY_SEGMENTS = Object.freeze([
+  "node_modules",
   "ito-compute-cli",
   "dist",
   "bin",
@@ -65,8 +66,11 @@ Important:
   - "evals" invokes only the canonical CLI's double-opt-in, pinned
     sixtytwo-cli node-qualification adapter against explicit nodes.
   - Node qualification cannot rent, launch, recover, repair, or purchase.
-  - Serve/train require an existing server-verified entitlement and matching
+  - Serve/train are target acceptance contracts, not live execution claims.
+    They require an existing server-verified entitlement and matching
     unconsumed same-origin confirmation state in the canonical backend.
+  - Serve/train require --max-incremental-cost-usd exactly 0 until incremental
+    workload accounting is implemented and independently verified.
   - Workload cancellation and cleanup never terminate the paid entitlement.
   - Inventory and RFQs are not reservations; only a returned firm quote is firm.
 
@@ -77,7 +81,7 @@ values and then install the recorded version:
   npm install --global ito-compute-cli@0.1.0
 
 Then set ${EXECUTABLE_OVERRIDE} to the explicit absolute built entry:
-  /absolute/npm/root/ito-compute-cli/dist/bin/ito.js
+  $(npm root --global)/ito-compute-cli/dist/bin/ito.js
 
 For safety, ECC never discovers this credential-bearing client through PATH.
 
@@ -219,9 +223,10 @@ function parseArgs(argv, environment = process.env) {
       "--entitlement", "--artifact-ref", "--image-digest",
       "--max-runtime-seconds", "--max-incremental-cost-usd", "--idempotency-key",
     ], ["--checkpoint-ref"]);
-    const costIndex = withoutJson.indexOf("--max-incremental-cost-usd");
-    if (withoutJson[costIndex + 1] !== "0") {
-      throw new Error("--max-incremental-cost-usd must be exactly 0 until workload accounting is deployed.");
+    if (requiredOptionValue(withoutJson, "--max-incremental-cost-usd") !== "0") {
+      throw new Error(
+        "--max-incremental-cost-usd must be exactly 0 until incremental workload accounting is implemented."
+      );
     }
   }
   if (command === "workload-status" || command === "workload-cancel" || command === "workload-cleanup") {
@@ -285,7 +290,7 @@ function isCanonicalItoEntry(candidate) {
     .normalize(candidate)
     .split(path.sep)
     .filter(Boolean);
-  return [SOURCE_CANONICAL_ENTRY_SEGMENTS, NPM_CANONICAL_ENTRY_SEGMENTS].some((expectedSegments) => {
+  return [SOURCE_CANONICAL_ENTRY_SEGMENTS, GLOBAL_NPM_ENTRY_SEGMENTS].some((expectedSegments) => {
     if (pathSegments.length < expectedSegments.length) return false;
     const candidateTail = pathSegments.slice(-expectedSegments.length);
     return candidateTail.every((segment, index) => {

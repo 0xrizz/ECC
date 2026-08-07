@@ -22,8 +22,8 @@ npm install --global ito-compute-cli@0.1.0
 
 Set `ECC_ITO_CLI_EXECUTABLE` to the explicit absolute built entry:
 
-```text
-/absolute/npm/root/ito-compute-cli/dist/bin/ito.js
+```sh
+export ECC_ITO_CLI_EXECUTABLE="$(npm root --global)/ito-compute-cli/dist/bin/ito.js"
 ```
 
 ECC never discovers this credential-bearing client through `PATH`.
@@ -84,10 +84,13 @@ as fixed only when the canonical result contains a non-null firm quote.
 After procurement, require the canonical control plane to return a
 server-verified, active entitlement. An RFQ, booking identifier, portal memory,
 node address, or SSH material is not workload authority. The portal must show
-the exact immutable manifest, runtime ceiling, incremental-cost ceiling, and
+the exact immutable manifest, runtime ceiling, incremental-cost ceiling of
+exactly USD 0, and
 entitlement to the user before recording short-lived, single-use same-origin
 confirmation state. The canonical backend consumes that state; ECC receives no
-confirmation secret.
+confirmation secret. Until incremental workload accounting exists, every
+`serve` and `train` request must pass `--max-incremental-cost-usd 0`; any other
+value is rejected before the canonical CLI starts.
 
 Use `ecc ito serve` or `ecc ito train` only through the corresponding skill.
 Confirmation is required only to start a workload. Later lifecycle operations

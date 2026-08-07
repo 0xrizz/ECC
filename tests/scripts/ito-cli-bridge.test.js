@@ -63,10 +63,10 @@ function runCliAndObserveFirstOutput(args, environment = {}) {
   });
 }
 
-function makeItoProbe(exitCode = 0, layout = "source") {
+function makeItoProbe(exitCode = 0, installation = "repository") {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "ecc-ito-cli-"));
   const log = path.join(directory, "invocation.json");
-  const script = layout === "npm"
+  const script = installation === "global-npm"
     ? path.join(directory, "lib", "node_modules", "ito-compute-cli", "dist", "bin", "ito.js")
     : path.join(directory, "ito-cloud-runtime", "cli", "ito-compute-cli", "dist", "bin", "ito.js");
   const executable = script;
@@ -177,34 +177,38 @@ async function main() {
         fs.rmSync(allowed.directory, { recursive: true, force: true });
       }
     }],
-    ["accepts the exact verified global npm package entry", () => {
-      const probe = makeItoProbe(0, "npm");
+    ["accepts the verified global npm package entry without relaxing the canonical tail", () => {
+      const probe = makeItoProbe(0, "global-npm");
       try {
-        const result = runCli(["ito", "auth"], {
+        const result = runCli(["ito", "status"], {
           ECC_ITO_CLI_EXECUTABLE: probe.executable,
         });
         assert.strictEqual(result.status, 0, result.stderr);
-        assert.deepStrictEqual(readInvocation(probe).argv, ["auth"]);
+        assert.deepStrictEqual(readInvocation(probe).argv, ["status"]);
+        assert.match(probe.executable, /node_modules[\\/]ito-compute-cli[\\/]dist[\\/]bin[\\/]ito\.js$/);
       } finally {
         fs.rmSync(probe.directory, { recursive: true, force: true });
       }
     }],
-    ["rejects nonzero workload cost before spawning", () => {
-      const probe = makeItoProbe();
-      try {
-        const result = runCli([
-          "ito", "serve", "--entitlement", "ent_001",
-          "--artifact-ref", "model@sha256:test",
-          "--image-digest", `sha256:${"d".repeat(64)}`,
-          "--max-runtime-seconds", "300",
-          "--max-incremental-cost-usd", "0.01",
-          "--idempotency-key", "idem_001",
-        ], { ECC_ITO_CLI_EXECUTABLE: probe.executable });
-        assert.notStrictEqual(result.status, 0);
-        assert.match(result.stderr, /must be exactly 0/i);
-        assert.ok(!fs.existsSync(probe.log));
-      } finally {
-        fs.rmSync(probe.directory, { recursive: true, force: true });
+    ["requires a zero incremental-cost ceiling before workload spawn", () => {
+      for (const value of ["0.0", "00", "-0", "0.01", "1"]) {
+        const probe = makeItoProbe();
+        try {
+          const result = runCli([
+            "ito", "serve",
+            "--entitlement", "ent_001",
+            "--artifact-ref", "model:hf-test@sha256:abc",
+            "--image-digest", `sha256:${"d".repeat(64)}`,
+            "--max-runtime-seconds", "300",
+            "--max-incremental-cost-usd", value,
+            "--idempotency-key", "idem_001",
+          ], { ECC_ITO_CLI_EXECUTABLE: probe.executable });
+          assert.notStrictEqual(result.status, 0, value);
+          assert.match(result.stderr, /must be exactly 0/i);
+          assert.ok(!fs.existsSync(probe.log), `${value} reached the canonical child`);
+        } finally {
+          fs.rmSync(probe.directory, { recursive: true, force: true });
+        }
       }
     }],
     ["rejects untyped workload, node-access, and secret arguments before spawning", () => {
@@ -747,6 +751,24 @@ async function main() {
         fs.rmSync(directory, { recursive: true, force: true });
       }
     }],
+    ["rejects a node_modules near-miss outside ito-compute-cli", () => {
+      const directory = fs.mkdtempSync(path.join(os.tmpdir(), "ecc-hostile-npm-near-miss-"));
+      const decoy = path.join(directory, "node_modules", "other-package", "dist", "bin", "ito.js");
+      const marker = path.join(directory, "spawned");
+      try {
+        fs.mkdirSync(path.dirname(decoy), { recursive: true });
+        fs.writeFileSync(decoy, `require("fs").writeFileSync(${JSON.stringify(marker)}, "spawned");\n`);
+        const result = runCli(["ito", "auth"], {
+          ECC_ITO_CLI_EXECUTABLE: decoy,
+          ITO_API_KEY: "must-not-cross",
+        });
+        assert.notStrictEqual(result.status, 0);
+        assert.match(result.stderr, /canonical dist\/bin\/ito\.js/i);
+        assert.ok(!fs.existsSync(marker));
+      } finally {
+        fs.rmSync(directory, { recursive: true, force: true });
+      }
+    }],
     ["rejects a relative executable override instead of searching or guessing", () => {
       const result = runCli(["ito", "status"], {
         ECC_ITO_CLI_EXECUTABLE: "ito",
@@ -786,6 +808,8 @@ async function main() {
         assert.match(result.stdout, /ito_find/);
         assert.match(result.stdout, /ito_status/);
         assert.match(result.stdout, /npm install --global ito-compute-cli@0\.1\.0/);
+        assert.match(result.stdout, /\$\(npm root --global\)\/ito-compute-cli\/dist\/bin\/ito\.js/);
+        assert.match(result.stdout, /--max-incremental-cost-usd exactly 0/i);
         assert.match(result.stdout, /publisher, provenance, and expected integrity/i);
         assert.doesNotMatch(result.stdout, /git clone/i);
         assert.match(result.stdout, /unpublished/i);

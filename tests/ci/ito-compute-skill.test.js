@@ -59,6 +59,7 @@ function main() {
       assert.doesNotMatch(skill, /git clone|npm ci/i);
       assert.match(skill, /ECC_ITO_CLI_EXECUTABLE/);
       assert.match(skill, /explicit absolute built entry/);
+      assert.match(skill, /\$\(npm root --global\)\/ito-compute-cli\/dist\/bin\/ito\.js/);
       assert.match(skill, /never discovers[^\n]*through `PATH`/);
       assert.match(skill, /ecc ito login --no-browser/);
       assert.match(skill, /return to the originating (?:agent|task)/i);
@@ -100,6 +101,11 @@ function main() {
       assert.match(inference, /ecc ito serve/);
       assert.match(training, /ecc ito train/);
       assert.match(training, /checkpoint-ref/);
+      for (const source of [compute, inference, training]) {
+        assert.match(source, /incremental[^.]*cost[^.]*0|--max-incremental-cost-usd 0/is);
+      }
+      assert.match(inference, /target acceptance contract/i);
+      assert.match(training, /target acceptance contract/i);
       assert.match(inference, /ECC receives no confirmation secret/);
       assert.match(training, /ECC\s+receives no confirmation secret/);
       for (const source of [inference, training]) {
@@ -170,6 +176,19 @@ function main() {
       assert.ok(!packageJson.dependencies?.["ito-compute-cli"]);
       assert.ok(!packageJson.optionalDependencies?.["ito-compute-cli"]);
       assert.ok(!packageJson.bin?.ito);
+    }],
+    ["requires a provenance-pinned clean global CLI install in CI", () => {
+      const workflow = read(".github/workflows/ito-cli-artifact.yml");
+      for (const variable of [
+        "ITO_COMPUTE_CLI_VERSION",
+        "ITO_COMPUTE_CLI_EXPECTED_INTEGRITY",
+        "ITO_COMPUTE_CLI_EXPECTED_PUBLISHER",
+      ]) assert.match(workflow, new RegExp(variable));
+      assert.match(workflow, /dist\.attestations/i);
+      assert.match(workflow, /npm install --global --prefix/i);
+      assert.match(workflow, /lib\/node_modules\/ito-compute-cli\/dist\/bin\/ito\.js/);
+      assert.match(workflow, /tests\/scripts\/ito-cli-bridge\.test\.js/);
+      assert.match(workflow, /AUTH_REQUIRED/);
     }],
     ["offers an opt-in local MCP template with the exact real tool boundary", () => {
       const mcpConfig = readJson("mcp-configs/mcp-servers.json");

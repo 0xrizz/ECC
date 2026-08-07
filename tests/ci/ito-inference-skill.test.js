@@ -33,35 +33,39 @@ function test(name, fn) {
 console.log("\n=== Testing Itô inference skill lifecycle ===\n");
 
 const results = [
-  test("uses the canonical inference surface and truthful availability boundary", () => {
+  test("uses the canonical serving trigger and labels the unavailable acceptance contract", () => {
     const skill = read("skills/ito-inference/SKILL.md");
     assert.match(skill, /^name: ito-inference$/m);
     assert.match(skill, /self-host|serve a model|OpenAI-compatible endpoint/i);
-    assert.doesNotMatch(skill, /^name: ito-serve$/m);
     assert.match(skill, /completed booking/i);
     assert.match(skill, /never books, reserves,\s+or spends/i);
-    assert.match(skill, /production entitlement, confirmation, credential-broker, and executor\s+adapters are not yet configured/i);
-    assert.match(skill, /fails closed before contacting\s+a node or provider/i);
-    assert.match(skill, /Never substitute direct SSH, a local runner, or a purchase\s+endpoint/i);
+    assert.match(skill, /ecc ito serve/i);
+    assert.match(skill, /target acceptance contract/i);
+    assert.match(skill, /not a live provider adapter or execution claim/i);
+    assert.match(skill, /execution is \*\*NOT READY\*\*/i);
+    assert.match(skill, /--max-incremental-cost-usd 0/i);
+    assert.match(skill, /accounting is not implemented/i);
+    assert.match(skill, /rejects every other value before\s+starting the canonical CLI/i);
+    assert.match(skill, /never substitute direct SSH, a local runner, or a purchase\s+endpoint/i);
     assert.doesNotMatch(skill, /ssh\s+root@|serve-status\.sh/i);
     for (const gate of [
       /server-verified, active compute entitlement/i,
-      /single-use same-origin confirmation state/i,
-      /approve the exact manifest and ceilings/i,
+      /single-use same-origin confirmation/i,
       /idempotency/i,
       /workload-status/i,
       /workload-cancel/i,
       /workload-cleanup/i,
-      /target acceptance contract/i,
-      /not claims about deployed execution/i,
     ]) assert.match(skill, gate);
-    assert.doesNotMatch(skill, /--confirmation-ref|--confirmation-token|--api-key|--access-token/i);
+    assert.doesNotMatch(skill, /--confirmation-token|--api-key|--access-token/i);
   }),
-  test("delegates canonical serving through the executable bridge without confirmation transport", () => {
+  test("delegates typed serving without confirmation transport", () => {
     const bridge = read("scripts/ito.js");
+    const environment = read("scripts/lib/ito-environment.js");
     assert.match(bridge, /SUPPORTED_COMMANDS[\s\S]+?"serve"[\s\S]+?"train"[\s\S]+?"workload-status"/);
-    assert.match(bridge, /Unsupported Itô command/);
+    assert.match(bridge, /--max-incremental-cost-usd must be exactly 0/i);
     assert.doesNotMatch(bridge, /ITO_WORKLOAD_CONFIRMATION_TOKEN|X-Ito-Workload-Confirmation/);
+    assert.doesNotMatch(environment, /ITO_WORKLOAD_CONFIRMATION_TOKEN/);
+    assert.doesNotMatch(`${bridge}\n${environment}`, /--confirm(?:ation)?(?:-token)?\b/i);
 
     const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ecc-ito-serve-reject-"));
     try {
