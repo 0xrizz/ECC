@@ -633,6 +633,36 @@
       "stability": "beta"
     },
     {
+      "id": "ito-training",
+      "kind": "skills",
+      "description": "Fail-closed Itô training workload planning for completed compute bookings; execution remains unavailable until the canonical backend ships it.",
+      "paths": [
+        "skills/ito-training"
+      ],
+      "targets": [
+        "claude",
+        "claude-project",
+        "cursor",
+        "antigravity",
+        "codex",
+        "gemini",
+        "opencode",
+        "codebuddy",
+        "joycode",
+        "qwen",
+        "zed",
+        "hermes",
+        "openclaw",
+        "kimi"
+      ],
+      "dependencies": [
+        "ito-compute"
+      ],
+      "defaultInstall": false,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    {
       "id": "social-distribution",
       "kind": "skills",
       "description": "Social publishing and distribution skills.",

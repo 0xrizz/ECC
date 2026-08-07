@@ -203,6 +203,14 @@
       ]
     },
     {
+      "id": "capability:ito-training",
+      "family": "capability",
+      "description": "Entitlement-bound Itô training planning and lifecycle operations for completed compute bookings, with exact confirmations and cost limits.",
+      "modules": [
+        "ito-training"
+      ]
+    },
+    {
       "id": "capability:social",
       "family": "capability",
       "description": "Social publishing and distribution skills.",

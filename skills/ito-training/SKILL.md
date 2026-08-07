@@ -1,60 +1,120 @@
 ---
 name: ito-training
-description: Run an ML training job on a completed Itô compute booking through the canonical Itô backend. Use after ito-compute has booked GPU nodes and the user wants pre-training, fine-tuning, or RL on that metal. Chains off a booking record; ECC implements no training stack of its own.
+description: Plan, launch, monitor, resume, cancel, and clean up an ML training workload on a completed Itô compute booking. Use when the user asks for a training job, fine-tuning or pre-training, a training cluster, or storage and checkpoints.
 metadata:
   origin: ECC
 ---
 
 # Itô Training
 
-Run training work on rented Itô metal by delegating to the canonical Itô compute
-backend (Layer 0.3). ECC does not implement a parallel training stack, trainer,
-or scheduler, and does no browser automation. This skill chains off a
-**completed booking** from `ito-compute`; it never books, reserves, or spends.
+Plan and operate a training workload on already-funded Itô metal through the
+canonical CLI. This skill never purchases capacity. The server queues accepted
+workloads for its configured executor; `queued` is not evidence of execution.
 
-## Prerequisite
+## Authority and prerequisite
 
-A completed booking from the `ito-compute` skill (booking id, node IPs, SSH,
-GPU SKU, node count, fabric) in harness memory. Without one, stop.
+Require a completed `ito-compute` booking record containing `booking_id`, node
+IPs, SSH readiness, GPU SKU, GPU and node counts, fabric, storage, region, and
+booking window. If it is absent or incomplete, return `BLOCKED` and route to
+`ito-compute`; do not guess, invent, derive, book, reserve, or provision.
 
-## Delegation
+Validate entitlement with the authenticated `ecc ito status --json` result.
+Require `reservations_supported: true` and a matching completed record in
+`procurement_orders`. An RFQ, quote, draft, or inventory result is not a booking
+or training authority. If reservations are reported as false, the procurement
+record is absent, or identities/topology do not match, return `BLOCKED` without
+calling a state-changing operation.
 
-ECC calls the canonical backend through the `ecc ito` bridge; it never
-re-implements training. Authenticate once with `ecc ito login`, as
-`ito-compute` documents. Never put a key or token in arguments, files, logs, or
-chat.
+Planning is read-only. Before any action that could launch a workload,
+increase spend, delete checkpoints, release nodes, or end a booking, require
+explicit confirmation with the exact action, resource, and cost/destructive
+effect. Existing booking authority is not training-launch authority.
 
-```sh
-ecc ito train \
-  --booking <booking-id> \
-  --model-size <e.g. 8B> \
-  --data <data-ref> \
-  --target <capability> \
-  --budget-usd <ceiling> \
-  [--post-training sft|dpo|rlvr]
+## Authentication handoff
+
+When authentication is needed, run `ecc ito login` for device authorization.
+It opens the verification page by default; `ecc ito login --no-browser` prints
+the handoff without opening it. Pause for the user, then return control to the
+originating agent. That agent runs `ecc ito auth` to validate the credential
+before continuing. Never expose a token, secret, or key in chat, logs,
+arguments, or files. A revoked credential requires a fresh device login; never
+silently fall back to another account or credential source.
+
+## Workload specification
+
+Collect these values and label every unresolved value; do not infer hard
+constraints from model size or a booking:
+
+- model identifier, parameter count, source revision, license, and weights;
+- dataset references, versions, sizes, licenses, access method, and data class;
+- training method (pre-training, continued pre-training, SFT, DPO, or RLVR),
+  objective, framework, precision, sequence length, global batch, optimizer,
+  scheduler, target tokens/steps/epochs, seed, and evaluation gates;
+- GPU SKU, GPU count, nodes, GPUs per node, fabric, CPU/RAM, image/runtime,
+  region, booking window, budget ceiling, and deadline;
+- storage capacity and class for source data, cache, logs, and checkpoints;
+- checkpoint cadence, format, upload bandwidth, retention, resume target,
+  encryption, destination, and cleanup owner.
+
+## Cluster recommendation
+
+Provide a recommendation, not a reservation. Compare the workload with the
+booked topology and state assumptions. Report model/data/optimizer memory,
+activation and communication headroom, parallelism (DP/TP/PP/FSDP), expected
+checkpoint size and bandwidth, estimated duration, and material risks. Mark the
+recommended cluster `INCOMPATIBLE` if it exceeds the completed booking or its
+fabric/storage/window. Never broaden region, topology, budget, or deadline.
+
+## Storage and checkpoint plan
+
+Separate immutable inputs, ephemeral cache, durable checkpoints, logs, and
+final artifacts. Include capacity math, write/read bandwidth, cadence,
+retention count/age, integrity verification, encryption/access boundary,
+resume procedure, and cleanup conditions. Cleanup is a proposed plan only;
+never delete checkpoints, data, or a booking without explicit confirmation.
+
+## Canonical operations
+
+Use only these CLI verbs; keep JSON output as evidence and never substitute a
+local trainer, ad-hoc SSH, browser automation, purchase, or third-party API:
+
+- `ecc ito train-launch ... --confirm "LAUNCH <booking-id>"`
+- `ecc ito train-status --run <run-id>`
+- `ecc ito train-logs --run <run-id>`
+- `ecc ito train-resume --run <run-id> --checkpoint <id> --max-additional-cost-usd <usd> --confirm "RESUME <run-id>"`
+- `ecc ito train-cancel --run <run-id> --confirm "CANCEL <run-id>"`
+- `ecc ito train-cleanup --run <run-id> --confirm "CLEANUP <run-id>"`
+
+Launch requires the completed workload fields documented above, an exact
+booking/topology match, and a positive `--max-cost-usd`. Treat `queued` as an
+accepted control-plane request only. Report `running` only when status does.
+
+## Monitoring and recovery
+
+After an ambiguous API/transport response or timeout, inspect `train-status` once
+before deciding anything and do not retry a state-changing operation. On auth
+revocation, stop and use the device-login handoff. On booking expiry, node
+failure, lost SSH access, checkpoint corruption, or failed eval gate, stop and
+report the evidence; never launch, restart, repair, release, clean up, or spend.
+
+## Structured output
+
+Return YAML (or an equivalent object) with stable fields:
+
+```yaml
+  status: BLOCKED | READY_FOR_REVIEW | QUEUED | RUNNING | SUCCEEDED | FAILED | CANCELLED | CLEANED | INCOMPATIBLE
+booking_id: string | null
+workload_spec: {}
+assumptions: []
+recommended_cluster: {}
+storage_plan: {}
+checkpoint_plan: {}
+estimated_cost_usd: null
+confirmation_required: []
+evidence: []
+blockers: []
+next_action: string
 ```
 
-## What the backend does (Layer 0.3)
-
-The desk backend runs a staged, eval-gated pipeline; this skill reports stage
-gates and never overrides one:
-
-1. Data prep — manifest, dedup, decontamination against the eval suite;
-   150M-ladder decision job as the cheap pre-check for custom data.
-2. Parallelism and precision — selected from model size, node count, fabric;
-   wasteful combinations refused.
-3. Checkpointing and fault tolerance — async DCP, torchft; detect < 10 min,
-   resume < 15 min. Loss-spike restart is a proposed, human-gated action.
-4. Curriculum and eval gates — staged pretrain / mid-train / long-context /
-   post-training, each with a fixed eval battery; a failed gate stops the run.
-5. Post-training — SFT → DPO → RLVR (GRPO with DAPO stability fixes),
-   trainer/rollout separation with bounded staleness.
-
-Emits desk telemetry (goodput, interruption rate, checkpoint bandwidth) so the
-desk prices training blocks honestly.
-
-## Unavailable today
-
-Not yet wired: the canonical CLI's `run` verb and the desk `training-run`
-backend are scaffolds. Until they land, this skill reports the missing
-capability and stops. Never substitute a local trainer or a purchase endpoint.
+Never infer a lifecycle state from a successful request; use the returned run
+state. If `reservations_supported` is false, remain `BLOCKED`.
