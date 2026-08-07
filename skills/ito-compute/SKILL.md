@@ -11,20 +11,19 @@ server. ECC itself does no browser automation.
 
 ## Install the canonical local package
 
-`ito-compute-cli` is currently unpublished. Build it from its canonical
-repository instead of using `npx`, `npm exec`, or an unverified package:
+`ito-compute-cli` is currently unpublished. Do not clone a private repository
+as an installation requirement. Install only after an official Itô release
+record identifies the npm publisher, provenance, and expected integrity and
+those values match the registry artifact:
 
 ```sh
-git clone https://github.com/Ito-Markets/ito-cloud-runtime.git
-cd ito-cloud-runtime/cli/ito-compute-cli
-npm ci
-npm run check
+npm install --global ito-compute-cli@0.1.0
 ```
 
 Set `ECC_ITO_CLI_EXECUTABLE` to the explicit absolute built entry:
 
 ```text
-/absolute/path/to/ito-cloud-runtime/cli/ito-compute-cli/dist/bin/ito.js
+/absolute/npm/root/ito-compute-cli/dist/bin/ito.js
 ```
 
 ECC never discovers this credential-bearing client through `PATH`.
@@ -132,8 +131,8 @@ recover, repair, reset, purchase, or order resources. ECC does not forward
 
 ## MCP workflow
 
-Build the canonical package, then configure the stdio server with an absolute
-path:
+After installing the verified canonical npm artifact, configure its stdio
+server with an absolute path:
 
 ```json
 {
@@ -141,7 +140,7 @@ path:
     "ito-compute": {
       "command": "node",
       "args": [
-        "/absolute/path/to/ito-cloud-runtime/cli/ito-compute-cli/dist/bin/ito-mcp.js"
+        "/absolute/npm/root/ito-compute-cli/dist/bin/ito-mcp.js"
       ]
     }
   }

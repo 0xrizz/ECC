@@ -53,9 +53,10 @@ function main() {
         /ito_lock|ito_run|ITO_CLI_DEMO|paper mode|simulated|live on the registry|publishing soon/i
       );
       assert.match(skill, /unpublished/i);
-      assert.match(skill, /Ito-Markets\/ito-cloud-runtime/);
-      assert.match(skill, /cli\/ito-compute-cli/);
-      assert.match(skill, /npm run check/);
+      assert.match(skill, /official Itô release\s+record/i);
+      assert.match(skill, /publisher, provenance, and expected integrity/i);
+      assert.match(skill, /npm install --global ito-compute-cli@0\.1\.0/);
+      assert.doesNotMatch(skill, /git clone|npm ci/i);
       assert.match(skill, /ECC_ITO_CLI_EXECUTABLE/);
       assert.match(skill, /explicit absolute built entry/);
       assert.match(skill, /never discovers[^\n]*through `PATH`/);

@@ -14,7 +14,6 @@ const { spawn, spawnSync } = require("child_process");
 const REPO_ROOT = path.join(__dirname, "..", "..");
 const ECC_SCRIPT = path.join(REPO_ROOT, "scripts", "ecc.js");
 const ITO_SCRIPT = path.join(REPO_ROOT, "scripts", "ito.js");
-const CANONICAL_PACKAGE = "Ito-Markets/ito-cloud-runtime/cli/ito-compute-cli";
 const {
   NODE_QUALIFICATION_TIMEOUT_MS,
 } = require("../../scripts/ito");
@@ -620,8 +619,8 @@ async function main() {
         });
         assert.notStrictEqual(result.status, 0);
         assert.match(result.stderr, /canonical ito-compute-cli is unpublished/i);
-        assert.match(result.stderr, new RegExp(CANONICAL_PACKAGE.replaceAll("/", "\\/")));
-        assert.match(result.stderr, /npm run check/);
+        assert.match(result.stderr, /official Itô release record/i);
+        assert.match(result.stderr, /publisher, provenance, and integrity/i);
         assert.match(result.stderr, /ECC_ITO_CLI_EXECUTABLE/);
         assert.match(result.stderr, /explicit absolute/i);
         assert.match(result.stderr, /unpublished/i);
@@ -773,7 +772,9 @@ async function main() {
         assert.match(result.stdout, /ito_auth/);
         assert.match(result.stdout, /ito_find/);
         assert.match(result.stdout, /ito_status/);
-        assert.match(result.stdout, new RegExp(CANONICAL_PACKAGE.replaceAll("/", "\\/")));
+        assert.match(result.stdout, /npm install --global ito-compute-cli@0\.1\.0/);
+        assert.match(result.stdout, /publisher, provenance, and expected integrity/i);
+        assert.doesNotMatch(result.stdout, /git clone/i);
         assert.match(result.stdout, /unpublished/i);
         assert.match(result.stdout, /never discovers[^\n]*through PATH/i);
         assert.match(result.stdout, /device authorization/i);

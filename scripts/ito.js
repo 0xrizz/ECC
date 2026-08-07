@@ -14,7 +14,6 @@ const SUPPORTED_COMMANDS = Object.freeze([
   "login", "logout", "auth", "find", "status", "evals",
   "serve", "train", "workload-status", "workload-cancel", "workload-cleanup",
 ]);
-const CANONICAL_REPOSITORY = "https://github.com/Ito-Markets/ito-cloud-runtime.git";
 const CANONICAL_PACKAGE_PATH = "cli/ito-compute-cli";
 const CANONICAL_ENTRY_SEGMENTS = Object.freeze([
   ...CANONICAL_PACKAGE_PATH.split("/"),
@@ -65,15 +64,14 @@ Important:
   - Workload cancellation and cleanup never terminate the paid entitlement.
   - Inventory and RFQs are not reservations; only a returned firm quote is firm.
 
-The canonical package is currently unpublished. Install it locally:
-  Canonical source: Ito-Markets/ito-cloud-runtime/${CANONICAL_PACKAGE_PATH}
-  git clone ${CANONICAL_REPOSITORY}
-  cd ito-cloud-runtime/${CANONICAL_PACKAGE_PATH}
-  npm ci
-  npm run check
+The canonical package is currently unpublished. Do not clone a private source
+repository as an installation requirement. After an official Itô release record
+identifies the npm publisher, provenance, and expected integrity, verify those
+values and then install the recorded version:
+  npm install --global ito-compute-cli@0.1.0
 
 Then set ${EXECUTABLE_OVERRIDE} to the explicit absolute built entry:
-  /absolute/path/to/ito-cloud-runtime/${CANONICAL_PACKAGE_PATH}/dist/bin/ito.js
+  /absolute/npm/root/ito-compute-cli/dist/bin/ito.js
 
 For safety, ECC never discovers this credential-bearing client through PATH.
 
@@ -83,7 +81,7 @@ The same package's MCP server exposes only:
   ito_status
 
 Configure the MCP command as "node" with this absolute argument:
-  /absolute/path/to/ito-cloud-runtime/${CANONICAL_PACKAGE_PATH}/dist/bin/ito-mcp.js
+  /absolute/npm/root/ito-compute-cli/dist/bin/ito-mcp.js
 
 Device login never inherits ITO_API_KEY. The auth, find, and status commands
 forward ITO_API_KEY directly when configured; ITO_AUTH_MODE=legacy is not
@@ -240,10 +238,10 @@ function resolveItoExecutable(environment = process.env) {
   if (!configured) {
     throw new Error([
       "The canonical ito-compute-cli is unpublished and ECC will not resolve",
-      `a credential-bearing "ito" executable from PATH. Build it from`,
-      `${CANONICAL_REPOSITORY.replace(/\.git$/, "")}/${CANONICAL_PACKAGE_PATH},`,
-      "run npm ci and npm run check, then set",
-      `${EXECUTABLE_OVERRIDE} to the explicit absolute dist/bin/ito.js path.`,
+      `a credential-bearing "ito" executable from PATH. Do not clone a private`,
+      "repository. Wait for an official Itô release record with verified npm",
+      "publisher, provenance, and integrity; install that artifact, then set",
+      `${EXECUTABLE_OVERRIDE} to its explicit absolute dist/bin/ito.js path.`,
     ].join(" "));
   }
 
@@ -366,7 +364,6 @@ if (require.main === module) {
 
 module.exports = Object.freeze({
   CANONICAL_PACKAGE_PATH,
-  CANONICAL_REPOSITORY,
   EXECUTABLE_OVERRIDE,
   NODE_QUALIFICATION_TIMEOUT_MS,
   SUPPORTED_COMMANDS,
