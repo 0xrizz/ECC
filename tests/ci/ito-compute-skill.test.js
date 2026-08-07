@@ -110,6 +110,13 @@ function main() {
         assert.match(source, /disclose secrets/i);
         assert.match(source, /execution is \*\*NOT READY\*\*/i);
       }
+      assert.match(training, /never an argv flag, URL parameter, log field, or\s+durable plaintext/i);
+      assert.match(training, /untrusted data/i);
+      assert.match(training, /cannot change identity, tool scope, cost ceilings, confirmation rules/i);
+      assert.doesNotMatch(training, /--confirm(?:ation)?(?:-token)?\b/i);
+      const bridge = read("scripts/ito.js");
+      assert.match(bridge, /ITO_WORKLOAD_CONFIRMATION_TOKEN/);
+      assert.doesNotMatch(bridge, /--confirm(?:ation)?(?:-token)?\b/i);
     }],
     ["keeps README and integration docs aligned with the separated auth contract", () => {
       for (const relativePath of [
