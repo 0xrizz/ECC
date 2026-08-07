@@ -33,42 +33,25 @@ function test(name, fn) {
 console.log("\n=== Testing Itô inference skill lifecycle ===\n");
 
 const results = [
-  test("uses the canonical serving trigger and fails closed while unavailable", () => {
+  test("uses canonical ito-inference and supersedes a standalone ito-serve skill", () => {
     const skill = read("skills/ito-inference/SKILL.md");
     assert.match(skill, /^name: ito-inference$/m);
-    assert.match(skill, /self-host|serve a model|OpenAI-compatible endpoint/i);
-    assert.match(skill, /requests naming .*ito-serve/i);
+    assert.ok(!fs.existsSync(path.join(REPO_ROOT, "skills", "ito-serve")));
+    assert.match(skill, /serve a model|OpenAI-compatible endpoint/i);
     assert.match(skill, /completed booking/i);
     assert.match(skill, /never books, reserves,\s+or spends/i);
-    assert.match(skill, /serving is unavailable today/i);
-    assert.match(skill, /report the\s+missing capability and return/i);
-    assert.match(skill, /stop before authentication/i);
-    assert.match(skill, /no `serve` verb/i);
-    assert.match(skill, /`inference`.*unsupported compatibility\s+probe/i);
-    assert.match(skill, /never substitute a\s+local runner, SSH helper, browser workflow, purchase endpoint/i);
+    assert.match(skill, /server-verified, active compute entitlement/i);
+    assert.match(skill, /ECC receives no confirmation secret/i);
+    assert.match(skill, /fails closed before contacting\s+a node or provider/i);
+    assert.match(skill, /never substitute direct SSH, a local runner, or a purchase\s+endpoint/i);
+    assert.match(skill, /Actual serving execution is \*\*NOT READY\*\*/i);
     assert.doesNotMatch(skill, /ssh\s+root@|serve-status\.sh/i);
-    for (const gate of [
-      /server-verified completed\s+booking/i,
-      /fresh serving eligibility/i,
-      /single-use confirmation/i,
-      /account, action, manifest, and\s+cost/i,
-      /idempotency/i,
-      /status, logs, metrics, cancel, and cleanup/i,
-      /structured JSON/i,
-      /ambiguous transport/i,
-      /reject symlinks/i,
-      /without following links/i,
-      /hash bytes from the opened descriptor/i,
-      /digest must exactly equal/i,
-    ]) assert.match(skill, gate);
-    assert.match(skill, /--confirmation-ref <opaque-non-authorizing-reference>/i);
     assert.doesNotMatch(skill, /--confirmation-token|--api-key|--access-token/i);
   }),
-  test("keeps unsupported serving outside the executable bridge", () => {
+  test("routes typed serving through the bridge while rejecting the superseded interface", () => {
     const bridge = read("scripts/ito.js");
-    assert.match(bridge, /SUPPORTED_COMMANDS[^\n]+login[^\n]+auth[^\n]+find[^\n]+status[^\n]+evals/);
-    assert.doesNotMatch(bridge, /SUPPORTED_COMMANDS[^\n]+serve/);
-    assert.match(bridge, /Unsupported Itô command/);
+    assert.match(bridge, /SUPPORTED_COMMANDS[\s\S]*?"serve"/);
+    assert.doesNotMatch(bridge, /--confirmation-token/i);
 
     const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ecc-ito-serve-reject-"));
     try {
@@ -85,8 +68,8 @@ const results = [
         env: { ...process.env, ECC_ITO_CLI_EXECUTABLE: executable },
       });
       assert.notStrictEqual(result.status, 0);
-      assert.match(result.stderr, /Unsupported Itô command "serve"/);
-      assert.ok(!fs.existsSync(marker), "unsupported serve spawned the canonical child");
+      assert.match(result.stderr, /Serve\/train accept only typed workload options/);
+      assert.ok(!fs.existsSync(marker), "rejected legacy serve interface spawned the canonical child");
     } finally {
       fs.rmSync(fixtureRoot, { recursive: true, force: true });
     }
@@ -110,7 +93,7 @@ const results = [
       {
         id: "capability:ito-compute",
         family: "capability",
-        description: "Authenticated Itô GPU inventory, RFQ, status, and explicitly gated node-qualification workflows through the separately installed canonical CLI.",
+        description: "Authenticated Itô GPU inventory, RFQ, status, device revocation, and explicitly gated node-qualification workflows through the separately installed canonical CLI.",
         modules: ["ito-compute"],
       }
     );
