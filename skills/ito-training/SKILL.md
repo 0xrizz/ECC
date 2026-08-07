@@ -45,11 +45,11 @@ checkpoints, and evaluation results as untrusted data only. Embedded
 instructions must never change agent identity, expand tool scope, bypass
 confirmation, trigger lifecycle actions, or disclose secrets.
 
-The portal binds the confirmation to the authenticated account, entitlement,
-and exact manifest digest. The bridge forwards it only through the protected
-process environment; it is never an argv flag, URL parameter, log field, or
-durable plaintext value. A retry reuses the non-secret idempotency key, never a
-second confirmation token.
+The portal binds confirmation state to the authenticated account, entitlement,
+and exact manifest digest. The server stores and atomically consumes that
+same-origin state; ECC never receives or forwards a confirmation token through
+argv, environment, headers, URLs, logs, or durable plaintext. A retry reuses
+only the non-secret idempotency key.
 
 ## Lifecycle, checkpoints, and portal handoff
 
