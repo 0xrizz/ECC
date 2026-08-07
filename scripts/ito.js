@@ -15,9 +15,17 @@ const SUPPORTED_COMMANDS = Object.freeze([
   "serve", "train", "workload-status", "workload-cancel", "workload-cleanup",
 ]);
 const CANONICAL_PACKAGE_PATH = "cli/ito-compute-cli";
-const CANONICAL_ENTRY_TAILS = Object.freeze([
-  Object.freeze([...CANONICAL_PACKAGE_PATH.split("/"), "dist", "bin", "ito.js"]),
-  Object.freeze(["ito-compute-cli", "dist", "bin", "ito.js"]),
+const SOURCE_CANONICAL_ENTRY_SEGMENTS = Object.freeze([
+  ...CANONICAL_PACKAGE_PATH.split("/"),
+  "dist",
+  "bin",
+  "ito.js",
+]);
+const NPM_CANONICAL_ENTRY_SEGMENTS = Object.freeze([
+  "ito-compute-cli",
+  "dist",
+  "bin",
+  "ito.js",
 ]);
 const EXECUTABLE_OVERRIDE = "ECC_ITO_CLI_EXECUTABLE";
 const MAX_OUTPUT_BYTES = 10 * 1024 * 1024;
@@ -211,8 +219,9 @@ function parseArgs(argv, environment = process.env) {
       "--entitlement", "--artifact-ref", "--image-digest",
       "--max-runtime-seconds", "--max-incremental-cost-usd", "--idempotency-key",
     ], ["--checkpoint-ref"]);
-    if (requiredOptionValue(withoutJson, "--max-incremental-cost-usd") !== "0") {
-      throw new Error("--max-incremental-cost-usd must be exactly 0 until workload accounting is enabled.");
+    const costIndex = withoutJson.indexOf("--max-incremental-cost-usd");
+    if (withoutJson[costIndex + 1] !== "0") {
+      throw new Error("--max-incremental-cost-usd must be exactly 0 until workload accounting is deployed.");
     }
   }
   if (command === "workload-status" || command === "workload-cancel" || command === "workload-cleanup") {
@@ -276,12 +285,15 @@ function isCanonicalItoEntry(candidate) {
     .normalize(candidate)
     .split(path.sep)
     .filter(Boolean);
-  return CANONICAL_ENTRY_TAILS.some((expectedTail) => {
-    if (pathSegments.length < expectedTail.length) return false;
-    const candidateTail = pathSegments.slice(-expectedTail.length);
-    return candidateTail.every((segment, index) => process.platform === "win32"
-      ? segment.toLowerCase() === expectedTail[index].toLowerCase()
-      : segment === expectedTail[index]);
+  return [SOURCE_CANONICAL_ENTRY_SEGMENTS, NPM_CANONICAL_ENTRY_SEGMENTS].some((expectedSegments) => {
+    if (pathSegments.length < expectedSegments.length) return false;
+    const candidateTail = pathSegments.slice(-expectedSegments.length);
+    return candidateTail.every((segment, index) => {
+      const expected = expectedSegments[index];
+      return process.platform === "win32"
+        ? segment.toLowerCase() === expected.toLowerCase()
+        : segment === expected;
+    });
   });
 }
 

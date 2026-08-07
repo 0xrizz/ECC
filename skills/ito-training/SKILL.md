@@ -77,9 +77,8 @@ cancel/cleanup lifecycle.
 
 ## What the backend does (Layer 0.3)
 
-These stages are target acceptance contracts for the future reviewed provider
-adapter; they are not evidence that a live adapter exists today. ECC reports
-stage gates and never overrides one:
+These stages are the target acceptance contract for a future reviewed provider
+adapter; they are not claims about deployed execution today:
 
 1. Data prep — manifest, dedup, decontamination against the eval suite;
    150M-ladder decision job as the cheap pre-check for custom data.

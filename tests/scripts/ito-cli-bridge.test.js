@@ -66,7 +66,7 @@ function runCliAndObserveFirstOutput(args, environment = {}) {
 function makeItoProbe(exitCode = 0, layout = "source") {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "ecc-ito-cli-"));
   const log = path.join(directory, "invocation.json");
-  const script = layout === "global"
+  const script = layout === "npm"
     ? path.join(directory, "lib", "node_modules", "ito-compute-cli", "dist", "bin", "ito.js")
     : path.join(directory, "ito-cloud-runtime", "cli", "ito-compute-cli", "dist", "bin", "ito.js");
   const executable = script;
@@ -177,23 +177,28 @@ async function main() {
         fs.rmSync(allowed.directory, { recursive: true, force: true });
       }
     }],
-    ["accepts the verified global npm package entry without PATH discovery", () => {
-      const probe = makeItoProbe(0, "global");
+    ["accepts the exact verified global npm package entry", () => {
+      const probe = makeItoProbe(0, "npm");
       try {
-        const result = runCli(["ito", "status"], { ECC_ITO_CLI_EXECUTABLE: probe.executable });
+        const result = runCli(["ito", "auth"], {
+          ECC_ITO_CLI_EXECUTABLE: probe.executable,
+        });
         assert.strictEqual(result.status, 0, result.stderr);
-        assert.deepStrictEqual(readInvocation(probe).argv, ["status"]);
+        assert.deepStrictEqual(readInvocation(probe).argv, ["auth"]);
       } finally {
         fs.rmSync(probe.directory, { recursive: true, force: true });
       }
     }],
-    ["rejects nonzero incremental workload cost before spawning", () => {
+    ["rejects nonzero workload cost before spawning", () => {
       const probe = makeItoProbe();
       try {
         const result = runCli([
-          "ito", "serve", "--entitlement", "ent_001", "--artifact-ref", "model:rev",
-          "--image-digest", `sha256:${"d".repeat(64)}`, "--max-runtime-seconds", "300",
-          "--max-incremental-cost-usd", "1", "--idempotency-key", "idem_001",
+          "ito", "serve", "--entitlement", "ent_001",
+          "--artifact-ref", "model@sha256:test",
+          "--image-digest", `sha256:${"d".repeat(64)}`,
+          "--max-runtime-seconds", "300",
+          "--max-incremental-cost-usd", "0.01",
+          "--idempotency-key", "idem_001",
         ], { ECC_ITO_CLI_EXECUTABLE: probe.executable });
         assert.notStrictEqual(result.status, 0);
         assert.match(result.stderr, /must be exactly 0/i);

@@ -65,8 +65,8 @@ addresses, and do not claim endpoint readiness without functional evidence.
 
 ## What the backend does (Layer 0.2)
 
-These stages are target acceptance contracts for the future reviewed provider
-adapter; they are not evidence that a live adapter exists today:
+These stages are the target acceptance contract for a future reviewed provider
+adapter; they are not claims about deployed execution today:
 
 1. Fabric gate — never launch on unverified metal. Blocks below 80% of
    fabric-expected bus bandwidth; advisory between 80% and 92%; fails loud on

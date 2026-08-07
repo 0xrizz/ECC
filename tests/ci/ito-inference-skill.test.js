@@ -33,43 +33,62 @@ function test(name, fn) {
 console.log("\n=== Testing Itô inference skill lifecycle ===\n");
 
 const results = [
-  test("uses canonical ito-inference and supersedes a standalone ito-serve skill", () => {
+  test("uses the canonical inference surface and truthful availability boundary", () => {
     const skill = read("skills/ito-inference/SKILL.md");
     assert.match(skill, /^name: ito-inference$/m);
-    assert.ok(!fs.existsSync(path.join(REPO_ROOT, "skills", "ito-serve")));
-    assert.match(skill, /serve a model|OpenAI-compatible endpoint/i);
+    assert.match(skill, /self-host|serve a model|OpenAI-compatible endpoint/i);
+    assert.doesNotMatch(skill, /^name: ito-serve$/m);
     assert.match(skill, /completed booking/i);
     assert.match(skill, /never books, reserves,\s+or spends/i);
-    assert.match(skill, /server-verified, active compute entitlement/i);
-    assert.match(skill, /ECC receives no confirmation secret/i);
+    assert.match(skill, /production entitlement, confirmation, credential-broker, and executor\s+adapters are not yet configured/i);
     assert.match(skill, /fails closed before contacting\s+a node or provider/i);
-    assert.match(skill, /never substitute direct SSH, a local runner, or a purchase\s+endpoint/i);
-    assert.match(skill, /Actual serving execution is \*\*NOT READY\*\*/i);
+    assert.match(skill, /Never substitute direct SSH, a local runner, or a purchase\s+endpoint/i);
     assert.doesNotMatch(skill, /ssh\s+root@|serve-status\.sh/i);
-    assert.doesNotMatch(skill, /ITO_WORKLOAD_CONFIRMATION_TOKEN|--confirmation-token|--api-key|--access-token/i);
+    for (const gate of [
+      /server-verified, active compute entitlement/i,
+      /single-use same-origin confirmation state/i,
+      /approve the exact manifest and ceilings/i,
+      /idempotency/i,
+      /workload-status/i,
+      /workload-cancel/i,
+      /workload-cleanup/i,
+      /target acceptance contract/i,
+      /not claims about deployed execution/i,
+    ]) assert.match(skill, gate);
+    assert.doesNotMatch(skill, /--confirmation-ref|--confirmation-token|--api-key|--access-token/i);
   }),
-  test("routes typed serving through the bridge while rejecting the superseded interface", () => {
+  test("delegates canonical serving through the executable bridge without confirmation transport", () => {
     const bridge = read("scripts/ito.js");
-    assert.match(bridge, /SUPPORTED_COMMANDS[\s\S]*?"serve"/);
-    assert.doesNotMatch(bridge, /ITO_WORKLOAD_CONFIRMATION_TOKEN|--confirmation-token/i);
+    assert.match(bridge, /SUPPORTED_COMMANDS[\s\S]+?"serve"[\s\S]+?"train"[\s\S]+?"workload-status"/);
+    assert.match(bridge, /Unsupported Itô command/);
+    assert.doesNotMatch(bridge, /ITO_WORKLOAD_CONFIRMATION_TOKEN|X-Ito-Workload-Confirmation/);
 
     const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ecc-ito-serve-reject-"));
     try {
       const canonicalDir = path.join(fixtureRoot, "cli", "ito-compute-cli", "dist", "bin");
       fs.mkdirSync(canonicalDir, { recursive: true });
-      const marker = path.join(fixtureRoot, "spawned");
+      const marker = path.join(fixtureRoot, "invocation.json");
       const executable = path.join(canonicalDir, "ito.js");
-      fs.writeFileSync(executable, `require("fs").writeFileSync(${JSON.stringify(marker)}, "spawned");\n`);
+      fs.writeFileSync(executable, `require("fs").writeFileSync(${JSON.stringify(marker)}, JSON.stringify({ argv: process.argv.slice(2), confirmation: process.env.ITO_WORKLOAD_CONFIRMATION_TOKEN }));\n`);
       const result = spawnSync(process.execPath, [
         path.join(REPO_ROOT, "scripts", "ecc.js"), "ito", "serve",
-        "--booking", "booking_test", "--model", "model_test",
+        "--entitlement", "ent_test", "--artifact-ref", "model@sha256:test",
+        "--image-digest", `sha256:${"d".repeat(64)}`,
+        "--max-runtime-seconds", "300", "--max-incremental-cost-usd", "0",
+        "--idempotency-key", "idem_test_001",
       ], {
         encoding: "utf8",
         env: { ...process.env, ECC_ITO_CLI_EXECUTABLE: executable },
       });
-      assert.notStrictEqual(result.status, 0);
-      assert.match(result.stderr, /Serve\/train accept only typed workload options/);
-      assert.ok(!fs.existsSync(marker), "rejected legacy serve interface spawned the canonical child");
+      assert.strictEqual(result.status, 0, result.stderr);
+      const invocation = JSON.parse(fs.readFileSync(marker, "utf8"));
+      assert.deepStrictEqual(invocation.argv, [
+        "serve", "--entitlement", "ent_test", "--artifact-ref", "model@sha256:test",
+        "--image-digest", `sha256:${"d".repeat(64)}`,
+        "--max-runtime-seconds", "300", "--max-incremental-cost-usd", "0",
+        "--idempotency-key", "idem_test_001",
+      ]);
+      assert.strictEqual(invocation.confirmation, undefined);
     } finally {
       fs.rmSync(fixtureRoot, { recursive: true, force: true });
     }
