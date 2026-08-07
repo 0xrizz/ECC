@@ -59,8 +59,8 @@ Important:
   - "evals" invokes only the canonical CLI's double-opt-in, pinned
     sixtytwo-cli node-qualification adapter against explicit nodes.
   - Node qualification cannot rent, launch, recover, repair, or purchase.
-  - Serve/train require an existing server-verified entitlement and a short-lived
-    portal-issued human confirmation in ITO_WORKLOAD_CONFIRMATION_TOKEN.
+  - Serve/train require an existing server-verified entitlement and matching
+    unconsumed same-origin confirmation state in the canonical backend.
   - Workload cancellation and cleanup never terminate the paid entitlement.
   - Inventory and RFQs are not reservations; only a returned firm quote is firm.
 
@@ -209,11 +209,6 @@ function parseArgs(argv, environment = process.env) {
     validateNodeQualificationArgs(withoutJson, environment);
   }
   if (command === "serve" || command === "train") {
-    if (!environment.ITO_WORKLOAD_CONFIRMATION_TOKEN?.trim()) {
-      throw new Error(
-        `${command} requires a portal-issued ITO_WORKLOAD_CONFIRMATION_TOKEN before any process is started.`
-      );
-    }
     validateTypedOptions(withoutJson, [
       "--entitlement", "--artifact-ref", "--image-digest",
       "--max-runtime-seconds", "--max-incremental-cost-usd", "--idempotency-key",

@@ -78,10 +78,6 @@ function createSafeItoEnvironment(source = process.env, options = {}) {
     }
   }
 
-  if (options.includeWorkloadConfirmation) {
-    copyDefined(source, safe, "ITO_WORKLOAD_CONFIRMATION_TOKEN");
-  }
-
   if (options.includeControls) {
     for (const key of ECC_ITO_CONTROL_KEYS) {
       copyDefined(source, safe, key);
@@ -106,7 +102,6 @@ function createSafeItoInvocationEnvironment(
     includeItoRuntime: ITO_RUNTIME_COMMANDS.has(command),
     includeItoApiKey: ["auth", "find", "status", "serve", "train", "workload-status", "workload-cancel", "workload-cleanup"].includes(command),
     includeItoEvals: command === "evals",
-    includeWorkloadConfirmation: command === "serve" || command === "train",
   });
 }
 

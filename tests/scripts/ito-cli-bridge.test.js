@@ -152,7 +152,7 @@ async function main() {
         fs.rmSync(probe.directory, { recursive: true, force: true });
       }
     }],
-    ["gates typed workloads on a portal confirmation and strips unrelated secrets", () => {
+    ["forwards typed workloads while stripping confirmation and unrelated secrets", () => {
       const args = [
         "ito", "serve",
         "--entitlement", "ent_001",
@@ -162,16 +162,6 @@ async function main() {
         "--max-incremental-cost-usd", "0",
         "--idempotency-key", "idem_001",
       ];
-      const denied = makeItoProbe();
-      try {
-        const result = runCli(args, { ECC_ITO_CLI_EXECUTABLE: denied.executable });
-        assert.notStrictEqual(result.status, 0);
-        assert.match(result.stderr, /portal-issued ITO_WORKLOAD_CONFIRMATION_TOKEN/i);
-        assert.ok(!fs.existsSync(denied.log));
-      } finally {
-        fs.rmSync(denied.directory, { recursive: true, force: true });
-      }
-
       const allowed = makeItoProbe();
       try {
         const result = runCli(args, {
@@ -185,7 +175,7 @@ async function main() {
         assert.strictEqual(result.status, 0, result.stderr);
         const invocation = readInvocation(allowed);
         assert.deepStrictEqual(invocation.argv, args.slice(1));
-        assert.strictEqual(invocation.env.ITO_WORKLOAD_CONFIRMATION_TOKEN, "one-time-human-confirmation");
+        assert.strictEqual(invocation.env.ITO_WORKLOAD_CONFIRMATION_TOKEN, undefined);
         assert.strictEqual(invocation.env.AWS_SECRET_ACCESS_KEY, undefined);
         assert.strictEqual(invocation.env.HF_TOKEN, undefined);
         assert.strictEqual(invocation.env.SSH_AUTH_SOCK, undefined);
@@ -214,7 +204,6 @@ async function main() {
         try {
           const result = runCli([...base, ...extra], {
             ECC_ITO_CLI_EXECUTABLE: probe.executable,
-            ITO_WORKLOAD_CONFIRMATION_TOKEN: "one-time-human-confirmation",
           });
           assert.notStrictEqual(result.status, 0, extra.join(" "));
           assert.match(result.stderr, /only typed workload options/i);
@@ -548,7 +537,7 @@ async function main() {
         "ITO_ALLOW_FILE_TOKEN",
         "ITO_TOKEN_FILE",
       ]);
-      for (const command of ["login", "auth", "find", "status", "workload-status", "workload-cancel", "workload-cleanup"]) {
+      for (const command of ["login", "auth", "find", "status", "serve", "train", "workload-status", "workload-cancel", "workload-cleanup"]) {
         const isolated = createSafeItoInvocationEnvironment(
           { ITO_WORKLOAD_CONFIRMATION_TOKEN: "must-not-cross" },
           [command],

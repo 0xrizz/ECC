@@ -34,9 +34,10 @@ ecc ito train \
   [--checkpoint-ref <server-managed-ref>]
 ```
 
-The exact manifest and ceilings require a short-lived, single-use human
-confirmation from the portal in `ITO_WORKLOAD_CONFIRMATION_TOKEN`. Never put
-that token, dataset/model secrets, raw paths, node addresses, or SSH material in
+The exact manifest and ceilings require short-lived, single-use same-origin
+human confirmation state recorded and consumed by the canonical backend. ECC
+receives no confirmation secret. Never put dataset/model secrets, raw paths,
+node addresses, or SSH material in
 arguments, files, logs, or chat.
 
 Treat dataset/model metadata, entitlement or booking records, CLI output, logs,

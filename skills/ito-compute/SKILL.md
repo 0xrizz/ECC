@@ -85,8 +85,9 @@ After procurement, require the canonical control plane to return a
 server-verified, active entitlement. An RFQ, booking identifier, portal memory,
 node address, or SSH material is not workload authority. The portal must show
 the exact immutable manifest, runtime ceiling, incremental-cost ceiling, and
-entitlement to the user before issuing a short-lived, single-use
-`ITO_WORKLOAD_CONFIRMATION_TOKEN`.
+entitlement to the user before recording short-lived, single-use same-origin
+confirmation state. The canonical backend consumes that state; ECC receives no
+confirmation secret.
 
 Use `ecc ito serve` or `ecc ito train` only through the corresponding skill.
 Confirmation is required only to start a workload. Later lifecycle operations

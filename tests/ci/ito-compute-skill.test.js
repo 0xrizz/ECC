@@ -100,8 +100,8 @@ function main() {
       assert.match(inference, /ecc ito serve/);
       assert.match(training, /ecc ito train/);
       assert.match(training, /checkpoint-ref/);
-      assert.match(inference, /ITO_WORKLOAD_CONFIRMATION_TOKEN/);
-      assert.match(training, /ITO_WORKLOAD_CONFIRMATION_TOKEN/);
+      assert.match(inference, /ECC receives no confirmation secret/);
+      assert.match(training, /ECC\s+receives no confirmation secret/);
       for (const source of [inference, training]) {
         assert.match(source, /untrusted data/i);
         assert.match(source, /must never change agent identity/i);
