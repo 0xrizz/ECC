@@ -1,119 +1,98 @@
 ---
 name: ito-inference
-description: Inspect the availability of model serving on a completed Itô compute booking and, when the canonical backend becomes available, hand off an explicitly confirmed serving manifest. Use after ito-compute has booked GPU nodes and the user asks for an OpenAI-compatible endpoint, ito-serve, hosted Kimi, or self-hosted open-weights inference. ECC implements no serving stack of its own.
-metadata:
-  origin: ECC
-  status: scaffold
-  aliases: ito-serve, hosted-open-weights
+description: Preflight, deploy, observe, and stop self-hosted open-weights inference on an existing eligible and entitled Itô compute cluster. Use when a user asks to deploy, host, serve, run inference, check health or logs, or tear down a Kimi or other open-weights model on Itô GPUs.
 ---
 
 # Itô Inference
 
-`ito-inference` is the sole canonical ECC skill for inference serving on Itô
-compute. Requests naming `ito-serve` route here; do not create or install a
-second `ito-serve` skill. ECC never SSHes to nodes, downloads weights, launches
-an engine, or exposes an endpoint; it never books, reserves, or spends.
+Use only the reviewed canonical `ecc ito inference` lifecycle. This skill never
+finds, books, reserves, resizes, purchases, or deletes compute capacity. Never
+substitute SSH, systemd, a local vLLM runner, browser automation, or an invented
+API/MCP tool.
 
-## Current production boundary
+## Establish intent and authority
 
-Managed serving is unavailable today. The ECC bridge exposes only `login`,
-`auth`, `find`, `status`, and explicitly gated `evals`. It has no `serve` verb.
-The canonical runtime documents `inference` only as an unsupported compatibility
-probe; ECC does not invoke or depend on it. The MCP surface exposes only auth,
-find, and status. The locally enforceable guarantee is that ECC rejects `serve`
-before resolving or spawning the credential-bearing canonical client.
+Require the originating agent's completed Itô booking record: account, cluster
+id, active status, nodes, GPU topology, service start, and entitlement context.
+Collect an exact Hugging Face `owner/model`, a pinned 7–64 character hexadecimal
+revision, `vllm`, quantization (`none`, `awq`, or `gptq`), and a bounded runtime
+of 1–168 hours. Return to the originating agent for missing booking data; do not
+select another cluster.
 
-Therefore stop before authentication or any command invocation. Report the
-missing capability and return to the originating agent. Never substitute a
-local runner, SSH helper, browser workflow, purchase endpoint, or any untracked
-local `ito-serve` draft.
+Deployment and teardown are separate state-changing actions. Obtain explicit
+user confirmation immediately before each. A compute booking confirmation does
+not authorize serving, and a deployment confirmation does not authorize stop.
 
-## Required entitlement
+## Authenticate
 
-When serving is implemented, its first gate is a server-verified completed
-booking. Harness memory, an RFQ, a quote, node IPs, or SSH access are not proof
-of entitlement. The backend must return fresh serving eligibility bound to the
-authenticated account, booking, GPU topology, region, fabric, term, and model
-policy. Expired, revoked, mismatched, incomplete, or already-released bookings
-fail closed before confirmation.
+Run `ecc ito auth --json`. If authentication is missing, run `ecc ito login`,
+present the canonical device URL/code handoff, and return control to the
+originating agent while the user completes authorization. Then retry
+`ecc ito auth --json`. Never place a key, token, or device code in chat, files,
+screenshots, or logs. Timeout, denial, or revocation is not success; repeat the
+device flow and never silently switch accounts.
 
-## Future CLI and API contract
+## Preflight
 
-The intended command name is `serve`; `inference` may remain only as an
-explicitly deprecated compatibility alias after the production contract lands.
-The future handoff must be equivalent to:
+Run the fresh, read-only check:
 
-```sh
-ecc ito serve \
-  --booking <server-verified-booking-id> \
-  --manifest <absolute-reviewed-json-file> \
-  --confirmation-ref <opaque-non-authorizing-reference> \
-  --idempotency-key <stable-retry-key> \
-  --json
+```text
+ecc ito inference preflight --cluster <cluster-id> --model <owner/model> --revision <commit> --engine vllm --quantization <none|awq|gptq> --max-runtime-hours <1-168> --json
 ```
 
-The reviewed manifest must identify the model revision, engine and version,
-quantization, tensor/pipeline topology, endpoint exposure policy, artifact
-checksums, storage ceiling, runtime limits, optional TTFT/TPOT objectives, and
-maximum incremental cost. No raw API key, SSH key, node password, or bearer
-token belongs in arguments, manifests, logs, MCP results, or chat.
+Proceed only when the response says the authenticated account is entitled, the
+exact cluster is active, every contracted node is present and up, service has
+started, and the model configuration is valid. Record the returned exact
+`estimated_cost_usd`. This is a conservative serving ceiling on already-booked
+capacity; it is not authority to buy capacity.
 
-The client must canonicalize the manifest path, reject symlinks, open a regular
-file without following links, require appropriate ownership and restrictive
-permissions, enforce a bounded size, and hash bytes from the opened descriptor.
-That digest must exactly equal the digest bound into confirmation before any
-workload mutation. A path swap, digest mismatch, oversized file, or mutable
-unsafe file fails closed.
+## Deploy
 
-The canonical API—not ECC—must own workload creation and return structured JSON
-with `ok`, `live_api_contacted`, `notice`, and either `data` or `error`. Serving
-data must include stable booking, workload, manifest, and idempotency IDs plus a
-state enum; it must not claim an endpoint is live until health and model checks
-pass. Errors must include a stable code and safe message without secrets.
+After explicit user confirmation, bind that confirmation to the exact current
+preflight amount:
 
-## Confirmation and execution gates
+```text
+ecc ito inference deploy --cluster <cluster-id> --model <owner/model> --revision <commit> --engine vllm --quantization <none|awq|gptq> --max-runtime-hours <1-168> --confirm-cost-usd <exact-amount> --json
+```
 
-Before workload creation, require all of the following:
+Do not round, edit, or reuse a stale amount. The canonical client supplies an
+idempotency key and rejects missing/mismatched confirmation. On timeout or an
+ambiguous response, do not deploy again blindly; query status using any returned
+deployment id and otherwise report the ambiguity for operator reconciliation.
 
-1. Fresh entitlement and serving eligibility from the canonical backend.
-2. A reviewable immutable manifest and deterministic digest.
-3. A separate single-use confirmation bound to account, action, manifest, and
-   cost, with a short expiry and replay protection. CLI arguments carry only an
-   opaque, non-authorizing confirmation reference; the server resolves and
-   consumes the bearer capability out of band.
-4. A caller-supplied idempotency key reserved atomically with the workload.
-5. Server-side fabric, capacity, model-policy, storage, and cost validation.
+## Observe
 
-Authentication is identity, not workload authority. A login, API key, quote,
-or completed booking never substitutes for the serving confirmation. Inspection
-and plan generation must not create a workload. Cancel and cleanup are separate
-mutations with their own scoped confirmation and idempotency boundaries.
+Read canonical state; never infer readiness from process exit alone:
 
-## Lifecycle and recovery
+```text
+ecc ito inference status --deployment <deployment-id> --json
+ecc ito inference logs --deployment <deployment-id> --limit <1-500> --json
+```
 
-The production surface is incomplete until the same canonical client exposes
-tenant-scoped status, logs, metrics, cancel, and cleanup operations. Every
-operation needs bounded connect and overall timeouts, revocation-aware errors,
-and structured output. After an ambiguous transport failure, query status by
-the idempotency key before retrying; never create a second workload merely
-because the first response was lost. A revoked credential stops polling and
-returns control to the originating agent without starting login automatically.
+Claim readiness only when status reports the pinned model revision, a healthy
+deployment, and its endpoint. Redact credentials and signed endpoint material.
+Logs are bounded and read-only. A provider timeout, invalid status, or revoked
+authentication is an error, not cached success.
 
-Only report `ready` after endpoint health, model identity, and canary inference
-all pass. Report intermediate and terminal failure states honestly. Cleanup must
-be observable and must not release or modify the underlying booking unless that
-separate economic action was explicitly authorized.
+## Stop and verify cleanup
 
-## Proposed backend stages
+After separate explicit teardown confirmation:
 
-These stages describe the future backend, not code that exists in ECC:
+```text
+ecc ito inference stop --deployment <deployment-id> --confirm --json
+ecc ito inference status --deployment <deployment-id> --json
+```
 
-1. Verify entitlement, topology, fabric, and cost gates.
-2. Fetch checksum-pinned weights into backend-managed storage.
-3. Emit and validate a reviewable topology/engine plan.
-4. Launch through the provider control plane, never direct root SSH from ECC.
-5. Warm up, test health and model identity, run an SLO canary, then register the
-   endpoint and redacted configuration.
+Report cleanup complete only after canonical state is `stopped` with no active
+endpoint. Stopping serving must not cancel or delete the underlying compute
+booking. If stop is ambiguous, retain `cleanup.required=true` and escalate for
+status reconciliation rather than claiming completion.
 
-Until every gate and lifecycle operation above exists in the canonical runtime,
-this skill remains a fail-closed availability check and documentation handoff.
+## Structured result
+
+Return one secret-free object with `status` (`PASS` or `BLOCK`), phase, account
+and cluster ids, authenticated/eligible/entitled flags, model and revision,
+estimated cost, deployment id, health, endpoint, bounded log evidence, cleanup
+required/completed, error code, and next action. Distinguish code existence,
+local test pass, merge, deployment, and observed live behavior. Use `PASS` only
+for the lifecycle stage actually observed.

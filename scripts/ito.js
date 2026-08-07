@@ -10,7 +10,7 @@ const {
   getInvocationCommand,
 } = require("./lib/ito-environment");
 
-const SUPPORTED_COMMANDS = Object.freeze(["login", "logout", "auth", "find", "status", "evals"]);
+const SUPPORTED_COMMANDS = Object.freeze(["login", "logout", "auth", "find", "status", "evals", "inference"]);
 const CANONICAL_REPOSITORY = "https://github.com/Ito-Markets/ito-cloud-runtime.git";
 const CANONICAL_PACKAGE_PATH = "cli/ito-compute-cli";
 const CANONICAL_ENTRY_SEGMENTS = Object.freeze([
@@ -34,14 +34,18 @@ Usage:
   ecc ito find <all required RFQ options>
   ecc ito status
   ecc ito evals --cluster <id> --live-sixtytwo --nodes <list> --config-dir <dir>
-  ecc ito <login|logout|auth|find|status|evals> --json
+  ecc ito inference preflight --cluster <id> --model <owner/model> --revision <commit> --engine vllm --max-runtime-hours <hours>
+  ecc ito inference deploy <same options> --confirm-cost-usd <exact preflight amount>
+  ecc ito inference <status|logs> --deployment <id>
+  ecc ito inference stop --deployment <id> --confirm
+  ecc ito <login|logout|auth|find|status|evals|inference> --json
 
 The bridge invokes the separately installed canonical Itô CLI and returns its
 real stdout, stderr, and exit code unchanged. "ecc ito login" delegates to the
 canonical CLI's device authorization. It opens the Itô verification page by default
 and persists its device token in macOS Keychain. Pass --no-browser to
 suppress that handoff. ECC itself performs no browser automation and adds no
-lock, workload, inference, or purchase path.
+lock, workload, or purchase path.
 "ecc ito auth" is validation-only and never starts device login.
 "ecc ito logout" asks the canonical CLI to revoke the current device credential
 and remove its local copy only after remote revocation is confirmed.
@@ -52,6 +56,10 @@ Important:
   - "status" reads live RFQ and procurement status.
   - "evals" invokes only the canonical CLI's double-opt-in, pinned
     sixtytwo-cli node-qualification adapter against explicit nodes.
+  - "inference preflight" is read-only; deploy and stop require the canonical
+    CLI's exact cost and explicit cleanup confirmations.
+  - Inference operates only on an existing active, entitled cluster. It cannot
+    find, book, reserve, purchase, resize, or delete compute capacity.
   - Node qualification cannot rent, launch, recover, repair, or purchase.
   - Inventory and RFQs are not reservations; only a returned firm quote is firm.
 
@@ -164,7 +172,7 @@ function parseArgs(argv, environment = process.env) {
   const command = withoutJson.shift();
   if (!SUPPORTED_COMMANDS.includes(command)) {
     throw new Error(
-      `Unsupported Itô command "${command || "(missing)"}"; ECC permits only login, logout, auth, find, status, and evals.`
+      `Unsupported Itô command "${command || "(missing)"}"; ECC permits only login, logout, auth, find, status, evals, and inference.`
     );
   }
   if (command === "auth" && withoutJson.includes("--no-browser")) {

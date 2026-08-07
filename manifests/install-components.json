@@ -203,6 +203,14 @@
       ]
     },
     {
+      "id": "capability:ito-inference",
+      "family": "capability",
+      "description": "Gated Itô inference preflight, deployment, observability, and cleanup on existing entitled clusters.",
+      "modules": [
+        "ito-inference"
+      ]
+    },
+    {
       "id": "capability:social",
       "family": "capability",
       "description": "Social publishing and distribution skills.",

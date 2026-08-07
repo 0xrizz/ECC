@@ -118,7 +118,7 @@ async function main() {
 
   const tests = [
     ["forwards only the reviewed RFQ CLI surface to an explicit local executable", () => {
-      for (const command of ["login", "logout", "auth", "find", "status"]) {
+      for (const command of ["login", "logout", "auth", "find", "status", "inference"]) {
         const probe = makeItoProbe();
         try {
           const result = runCli(["ito", command], {
@@ -241,8 +241,8 @@ async function main() {
         fs.rmSync(probe.directory, { recursive: true, force: true });
       }
     }],
-    ["forwards ITO_API_KEY directly to auth, find, and status without legacy mode", () => {
-      for (const command of ["auth", "find", "status"]) {
+    ["forwards ITO_API_KEY directly to authenticated runtime commands without legacy mode", () => {
+      for (const command of ["auth", "find", "status", "inference"]) {
         const probe = makeItoProbe();
         try {
           const result = runCli(["ito", command], {
@@ -254,6 +254,33 @@ async function main() {
         } finally {
           fs.rmSync(probe.directory, { recursive: true, force: true });
         }
+      }
+    }],
+    ["passes inference lifecycle arguments and explicit confirmation boundaries unchanged", () => {
+      const probe = makeItoProbe();
+      try {
+        const args = [
+          "ito", "inference", "deploy",
+          "--cluster", "clu_1",
+          "--model", "Qwen/Qwen3-8B",
+          "--revision", "a1b2c3d4",
+          "--engine", "vllm",
+          "--max-runtime-hours", "2",
+          "--confirm-cost-usd", "32.00",
+          "--json",
+        ];
+        const result = runCli(args, {
+          ECC_ITO_CLI_EXECUTABLE: probe.executable,
+          ITO_API_KEY: "ito_test_key",
+          OPENAI_API_KEY: "must-not-cross",
+        });
+        assert.strictEqual(result.status, 0, result.stderr);
+        const invocation = readInvocation(probe);
+        assert.deepStrictEqual(invocation.argv, ["--json", ...args.slice(1, -1)]);
+        assert.strictEqual(invocation.env.ITO_API_KEY, "ito_test_key");
+        assert.strictEqual(invocation.env.OPENAI_API_KEY, undefined);
+      } finally {
+        fs.rmSync(probe.directory, { recursive: true, force: true });
       }
     }],
     ["streams device login output before completion and propagates its exit status", async () => {
@@ -473,14 +500,14 @@ async function main() {
       );
     }],
     ["rejects unsupported browser, paper, and execution operations before spawning", () => {
-      for (const command of ["rent", "lock", "purchase", "run", "inference", "mcp"]) {
+      for (const command of ["rent", "lock", "purchase", "run", "mcp"]) {
         const probe = makeItoProbe();
         try {
           const result = runCli(["ito", command], {
             ECC_ITO_CLI_EXECUTABLE: probe.executable,
           });
           assert.notStrictEqual(result.status, 0, command);
-          assert.match(result.stderr, /only login, logout, auth, find, status, and evals/i);
+          assert.match(result.stderr, /only login, logout, auth, find, status, evals, and inference/i);
           assert.ok(!fs.existsSync(probe.log), `${command} must not spawn the Itô CLI`);
         } finally {
           fs.rmSync(probe.directory, { recursive: true, force: true });

@@ -1,130 +1,77 @@
-/**
- * Contract tests for the installable, fail-closed Itô inference handoff.
- */
+/** Contract tests for the installable, fail-closed Itô inference skill. */
 
 const assert = require("assert");
 const fs = require("fs");
-const os = require("os");
 const path = require("path");
-const { spawnSync } = require("child_process");
 
-const REPO_ROOT = path.join(__dirname, "..", "..");
+const ROOT = path.join(__dirname, "..", "..");
+const read = (file) => fs.readFileSync(path.join(ROOT, file), "utf8");
+const json = (file) => JSON.parse(read(file));
+const skill = read("skills/ito-inference/SKILL.md");
 
-function read(relativePath) {
-  return fs.readFileSync(path.join(REPO_ROOT, relativePath), "utf8");
-}
-
-function readJson(relativePath) {
-  return JSON.parse(read(relativePath));
-}
-
-function test(name, fn) {
-  try {
-    fn();
-    console.log(`  ✓ ${name}`);
-    return true;
-  } catch (error) {
-    console.log(`  ✗ ${name}`);
-    console.error(`    ${error.message}`);
-    return false;
-  }
-}
-
-console.log("\n=== Testing Itô inference skill lifecycle ===\n");
-
-const results = [
-  test("uses the canonical serving trigger and fails closed while unavailable", () => {
-    const skill = read("skills/ito-inference/SKILL.md");
-    assert.match(skill, /^name: ito-inference$/m);
-    assert.match(skill, /self-host|serve a model|OpenAI-compatible endpoint/i);
-    assert.match(skill, /requests naming .*ito-serve/i);
-    assert.match(skill, /completed booking/i);
-    assert.match(skill, /never books, reserves,\s+or spends/i);
-    assert.match(skill, /serving is unavailable today/i);
-    assert.match(skill, /report the\s+missing capability and return/i);
-    assert.match(skill, /stop before authentication/i);
-    assert.match(skill, /no `serve` verb/i);
-    assert.match(skill, /`inference`.*unsupported compatibility\s+probe/i);
-    assert.match(skill, /never substitute a\s+local runner, SSH helper, browser workflow, purchase endpoint/i);
-    assert.doesNotMatch(skill, /ssh\s+root@|serve-status\.sh/i);
-    for (const gate of [
-      /server-verified completed\s+booking/i,
-      /fresh serving eligibility/i,
-      /single-use confirmation/i,
-      /account, action, manifest, and\s+cost/i,
-      /idempotency/i,
-      /status, logs, metrics, cancel, and cleanup/i,
-      /structured JSON/i,
-      /ambiguous transport/i,
-      /reject symlinks/i,
-      /without following links/i,
-      /hash bytes from the opened descriptor/i,
-      /digest must exactly equal/i,
-    ]) assert.match(skill, gate);
-    assert.match(skill, /--confirmation-ref <opaque-non-authorizing-reference>/i);
-    assert.doesNotMatch(skill, /--confirmation-token|--api-key|--access-token/i);
-  }),
-  test("keeps unsupported serving outside the executable bridge", () => {
-    const bridge = read("scripts/ito.js");
-    assert.match(bridge, /SUPPORTED_COMMANDS[^\n]+login[^\n]+auth[^\n]+find[^\n]+status[^\n]+evals/);
-    assert.doesNotMatch(bridge, /SUPPORTED_COMMANDS[^\n]+serve/);
-    assert.match(bridge, /Unsupported Itô command/);
-
-    const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ecc-ito-serve-reject-"));
-    try {
-      const canonicalDir = path.join(fixtureRoot, "cli", "ito-compute-cli", "dist", "bin");
-      fs.mkdirSync(canonicalDir, { recursive: true });
-      const marker = path.join(fixtureRoot, "spawned");
-      const executable = path.join(canonicalDir, "ito.js");
-      fs.writeFileSync(executable, `require("fs").writeFileSync(${JSON.stringify(marker)}, "spawned");\n`);
-      const result = spawnSync(process.execPath, [
-        path.join(REPO_ROOT, "scripts", "ecc.js"), "ito", "serve",
-        "--booking", "booking_test", "--model", "model_test",
-      ], {
-        encoding: "utf8",
-        env: { ...process.env, ECC_ITO_CLI_EXECUTABLE: executable },
-      });
-      assert.notStrictEqual(result.status, 0);
-      assert.match(result.stderr, /Unsupported Itô command "serve"/);
-      assert.ok(!fs.existsSync(marker), "unsupported serve spawned the canonical child");
-    } finally {
-      fs.rmSync(fixtureRoot, { recursive: true, force: true });
+const tests = [
+  ["has trigger-rich two-field frontmatter", () => {
+    const frontmatter = skill.match(/^---\n([\s\S]*?)\n---/)[1];
+    const keys = [...frontmatter.matchAll(/^([a-z_-]+):/gm)].map((match) => match[1]);
+    assert.deepStrictEqual(keys, ["name", "description"]);
+    for (const phrase of ["deploy", "host", "serve", "run inference", "check", "tear down"]) {
+      assert.match(frontmatter, new RegExp(phrase, "i"));
     }
-  }),
-  test("ships canonical inference through the existing opt-in compute module", () => {
-    const modules = readJson("manifests/install-modules.json").modules;
-    const module = modules.find((candidate) => candidate.id === "ito-compute");
-    assert.ok(module, "ito-compute install module is missing");
-    assert.deepStrictEqual(module.paths, [
-      "skills/ito-compute",
-      "skills/ito-inference",
-      "skills/ito-training",
-    ]);
-    assert.deepStrictEqual(module.dependencies, ["platform-configs"]);
+  }],
+  ["requires originating booking, exact eligibility, and no capacity selection", () => {
+    for (const pattern of [
+      /originating agent/, /completed Itô booking/, /cluster id/, /active status/,
+      /entitlement/, /do not\s+select another cluster/, /never\s+finds, books, reserves/,
+    ]) assert.match(skill, pattern);
+  }],
+  ["documents device login return and revocation recovery without secrets", () => {
+    for (const pattern of [
+      /ecc ito auth --json/, /ecc ito login/, /device URL\/code handoff/,
+      /return control to the\s+originating agent/, /Timeout, denial, or revocation/,
+      /Never place a key, token, or device code/,
+    ]) assert.match(skill, pattern);
+  }],
+  ["documents the complete canonical lifecycle and validation bounds", () => {
+    for (const pattern of [
+      /inference preflight/, /inference deploy/, /inference status/,
+      /inference logs/, /inference stop/, /owner\/model/, /pinned 7–64/,
+      /1–168 hours/, /exact current\s+preflight amount/, /idempotency key/,
+    ]) assert.match(skill, pattern);
+  }],
+  ["enforces separate confirmations, ambiguity recovery, and safe cleanup", () => {
+    for (const pattern of [
+      /separate state-changing actions/, /explicit\s+user confirmation immediately before each/,
+      /do not deploy again blindly/, /provider timeout[\s\S]*not cached success/,
+      /separate explicit teardown confirmation/, /must not cancel or delete.*compute\s+booking/,
+      /cleanup.required=true/,
+    ]) assert.match(skill, pattern);
+  }],
+  ["defines structured results and honest capability-state distinctions", () => {
+    for (const field of [
+      "status", "phase", "cluster", "authenticated", "eligible", "entitled",
+      "model", "revision", "estimated cost", "deployment id", "health",
+      "endpoint", "cleanup", "error code", "next action",
+    ]) assert.match(skill, new RegExp(field, "i"));
+    assert.match(skill, /code existence,\s+local test pass, merge, deployment, and observed live behavior/);
+  }],
+  ["registers package, module, dependency, capability, and full profile", () => {
+    const module = json("manifests/install-modules.json").modules.find((item) => item.id === "ito-inference");
+    assert.deepStrictEqual(module.paths, ["skills/ito-inference"]);
+    assert.deepStrictEqual(module.dependencies, ["ito-compute"]);
     assert.strictEqual(module.defaultInstall, false);
-    assert.strictEqual(module.stability, "beta");
-
-    const components = readJson("manifests/install-components.json").components;
-    assert.deepStrictEqual(
-      components.find((candidate) => candidate.id === "capability:ito-compute"),
-      {
-        id: "capability:ito-compute",
-        family: "capability",
-        description: "Authenticated Itô GPU inventory, RFQ, status, and explicitly gated node-qualification workflows through the separately installed canonical CLI.",
-        modules: ["ito-compute"],
-      }
-    );
-
-    const profiles = readJson("manifests/install-profiles.json").profiles;
-    assert.ok(profiles.full.modules.includes("ito-compute"));
-
-    const packageFiles = readJson("package.json").files;
-    assert.ok(packageFiles.includes("skills/ito-inference/"));
-    assert.ok(packageFiles.includes("skills/ito-training/"));
-  }),
+    assert.strictEqual(module.stability, "experimental");
+    assert.ok(module.targets.includes("codex") && module.targets.includes("kimi"));
+    assert.deepStrictEqual(json("manifests/install-components.json").components.find((item) => item.id === "capability:ito-inference").modules, ["ito-inference"]);
+    assert.ok(json("manifests/install-profiles.json").profiles.full.modules.includes("ito-inference"));
+    assert.ok(json("package.json").files.includes("skills/ito-inference/"));
+  }],
 ];
 
-const failed = results.filter((passed) => !passed).length;
-console.log(`\nPassed: ${results.length - failed}`);
+let failed = 0;
+for (const [name, test] of tests) {
+  try { test(); console.log(`  ✓ ${name}`); }
+  catch (error) { failed += 1; console.error(`  ✗ ${name}: ${error.message}`); }
+}
+console.log(`Passed: ${tests.length - failed}`);
 console.log(`Failed: ${failed}`);
-process.exit(failed > 0 ? 1 : 0);
+process.exitCode = failed ? 1 : 0;

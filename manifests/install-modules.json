@@ -635,6 +635,36 @@
       "stability": "beta"
     },
     {
+      "id": "ito-inference",
+      "kind": "skills",
+      "description": "Gated Itô inference eligibility, entitlement, deployment, observability, and cleanup on existing clusters.",
+      "paths": [
+        "skills/ito-inference"
+      ],
+      "targets": [
+        "claude",
+        "claude-project",
+        "cursor",
+        "antigravity",
+        "codex",
+        "gemini",
+        "opencode",
+        "codebuddy",
+        "joycode",
+        "qwen",
+        "zed",
+        "hermes",
+        "openclaw",
+        "kimi"
+      ],
+      "dependencies": [
+        "ito-compute"
+      ],
+      "defaultInstall": false,
+      "cost": "light",
+      "stability": "experimental"
+    },
+    {
       "id": "social-distribution",
       "kind": "skills",
       "description": "Social publishing and distribution skills.",
