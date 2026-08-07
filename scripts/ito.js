@@ -10,7 +10,10 @@ const {
   getInvocationCommand,
 } = require("./lib/ito-environment");
 
-const SUPPORTED_COMMANDS = Object.freeze(["login", "logout", "auth", "find", "status", "evals"]);
+const SUPPORTED_COMMANDS = Object.freeze([
+  "login", "logout", "auth", "find", "status", "evals",
+  "serve", "train", "workload-status", "workload-cancel", "workload-cleanup",
+]);
 const CANONICAL_REPOSITORY = "https://github.com/Ito-Markets/ito-cloud-runtime.git";
 const CANONICAL_PACKAGE_PATH = "cli/ito-compute-cli";
 const CANONICAL_ENTRY_SEGMENTS = Object.freeze([
@@ -34,14 +37,18 @@ Usage:
   ecc ito find <all required RFQ options>
   ecc ito status
   ecc ito evals --cluster <id> --live-sixtytwo --nodes <list> --config-dir <dir>
-  ecc ito <login|logout|auth|find|status|evals> --json
+  ecc ito <serve|train> --entitlement <id> <typed workload options>
+  ecc ito workload-status --run <id>
+  ecc ito workload-cancel --run <id>
+  ecc ito workload-cleanup --run <id>
+  ecc ito <login|logout|auth|find|status|evals|serve|train|workload-status|workload-cancel|workload-cleanup> --json
 
 The bridge invokes the separately installed canonical Itô CLI and returns its
 real stdout, stderr, and exit code unchanged. "ecc ito login" delegates to the
 canonical CLI's device authorization. It opens the Itô verification page by default
 and persists its device token in macOS Keychain. Pass --no-browser to
 suppress that handoff. ECC itself performs no browser automation and adds no
-lock, workload, inference, or purchase path.
+lock, arbitrary-command, direct-SSH, or purchase path.
 "ecc ito auth" is validation-only and never starts device login.
 "ecc ito logout" asks the canonical CLI to revoke the current device credential
 and remove its local copy only after remote revocation is confirmed.
@@ -53,6 +60,9 @@ Important:
   - "evals" invokes only the canonical CLI's double-opt-in, pinned
     sixtytwo-cli node-qualification adapter against explicit nodes.
   - Node qualification cannot rent, launch, recover, repair, or purchase.
+  - Serve/train require an existing server-verified entitlement and a short-lived
+    portal-issued human confirmation in ITO_WORKLOAD_CONFIRMATION_TOKEN.
+  - Workload cancellation and cleanup never terminate the paid entitlement.
   - Inventory and RFQs are not reservations; only a returned firm quote is firm.
 
 The canonical package is currently unpublished. Install it locally:
@@ -101,6 +111,33 @@ function requiredOptionValue(args, option) {
     throw new Error(`${option} requires a non-empty value for live node qualification.`);
   }
   return value;
+}
+
+function validateTypedOptions(args, requiredOptions, optionalOptions = []) {
+  const allowed = new Set([...requiredOptions, ...optionalOptions]);
+  for (let index = 0; index < args.length; index += 2) {
+    const option = args[index];
+    const value = args[index + 1];
+    if (!allowed.has(option) || !value?.trim() || value.startsWith("--")) {
+      throw new Error(
+        "Serve/train accept only typed workload options; node addresses, SSH material, secrets, positional commands, and arbitrary flags are forbidden."
+      );
+    }
+  }
+  for (const option of requiredOptions) requiredOptionValue(args, option);
+  for (const option of optionalOptions) {
+    const count = args.filter((value) => value === option).length;
+    if (count > 1) throw new Error(`${option} may be provided at most once.`);
+  }
+}
+
+function validateRunLifecycleArgs(args) {
+  if (args.length !== 2 || args[0] !== "--run") {
+    throw new Error(
+      "Workload cancellation and cleanup accept only --run <id>; they do not accept confirmation, entitlement termination, node access, or force options."
+    );
+  }
+  requiredOptionValue(args, "--run");
 }
 
 function validateNodeQualificationArgs(args, environment) {
@@ -164,7 +201,7 @@ function parseArgs(argv, environment = process.env) {
   const command = withoutJson.shift();
   if (!SUPPORTED_COMMANDS.includes(command)) {
     throw new Error(
-      `Unsupported Itô command "${command || "(missing)"}"; ECC permits only login, logout, auth, find, status, and evals.`
+      `Unsupported Itô command "${command || "(missing)"}"; ECC permits only login, logout, auth, find, status, evals, serve, train, workload-status, workload-cancel, and workload-cleanup.`
     );
   }
   if (command === "auth" && withoutJson.includes("--no-browser")) {
@@ -172,6 +209,20 @@ function parseArgs(argv, environment = process.env) {
   }
   if (command === "evals") {
     validateNodeQualificationArgs(withoutJson, environment);
+  }
+  if (command === "serve" || command === "train") {
+    if (!environment.ITO_WORKLOAD_CONFIRMATION_TOKEN?.trim()) {
+      throw new Error(
+        `${command} requires a portal-issued ITO_WORKLOAD_CONFIRMATION_TOKEN before any process is started.`
+      );
+    }
+    validateTypedOptions(withoutJson, [
+      "--entitlement", "--artifact-ref", "--image-digest",
+      "--max-runtime-seconds", "--max-incremental-cost-usd", "--idempotency-key",
+    ], ["--checkpoint-ref"]);
+  }
+  if (command === "workload-status" || command === "workload-cancel" || command === "workload-cleanup") {
+    validateRunLifecycleArgs(withoutJson);
   }
 
   return Object.freeze({

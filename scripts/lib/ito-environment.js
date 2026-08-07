@@ -45,7 +45,10 @@ const ECC_ITO_CONTROL_KEYS = Object.freeze([
   "ECC_ITO_CLI_EXECUTABLE",
   "NODE_ENV",
 ]);
-const ITO_RUNTIME_COMMANDS = new Set(["login", "logout", "auth", "find", "status"]);
+const ITO_RUNTIME_COMMANDS = new Set([
+  "login", "logout", "auth", "find", "status",
+  "serve", "train", "workload-status", "workload-cancel", "workload-cleanup",
+]);
 
 function copyDefined(source, target, key) {
   if (typeof source[key] === "string") {
@@ -75,6 +78,10 @@ function createSafeItoEnvironment(source = process.env, options = {}) {
     }
   }
 
+  if (options.includeWorkloadConfirmation) {
+    copyDefined(source, safe, "ITO_WORKLOAD_CONFIRMATION_TOKEN");
+  }
+
   if (options.includeControls) {
     for (const key of ECC_ITO_CONTROL_KEYS) {
       copyDefined(source, safe, key);
@@ -97,8 +104,9 @@ function createSafeItoInvocationEnvironment(
   return createSafeItoEnvironment(source, {
     includeControls: options.includeControls === true,
     includeItoRuntime: ITO_RUNTIME_COMMANDS.has(command),
-    includeItoApiKey: ["auth", "find", "status"].includes(command),
+    includeItoApiKey: ["auth", "find", "status", "serve", "train", "workload-status", "workload-cancel", "workload-cleanup"].includes(command),
     includeItoEvals: command === "evals",
+    includeWorkloadConfirmation: command === "serve" || command === "train",
   });
 }
 

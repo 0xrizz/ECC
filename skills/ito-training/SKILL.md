@@ -1,8 +1,6 @@
 ---
 name: ito-training
 description: Run an ML training job on a completed Itô compute booking through the canonical Itô backend. Use after ito-compute has booked GPU nodes and the user wants pre-training, fine-tuning, or RL on that metal. Chains off a booking record; ECC implements no training stack of its own.
-metadata:
-  origin: ECC
 ---
 
 # Itô Training
@@ -14,8 +12,9 @@ or scheduler, and does no browser automation. This skill chains off a
 
 ## Prerequisite
 
-A completed booking from the `ito-compute` skill (booking id, node IPs, SSH,
-GPU SKU, node count, fabric) in harness memory. Without one, stop.
+A server-verified, active compute entitlement for an already-paid booking or
+cluster. Harness memory, node IPs, and SSH material are not authority. Without
+an entitlement, stop.
 
 ## Delegation
 
@@ -26,13 +25,38 @@ chat.
 
 ```sh
 ecc ito train \
-  --booking <booking-id> \
-  --model-size <e.g. 8B> \
-  --data <data-ref> \
-  --target <capability> \
-  --budget-usd <ceiling> \
-  [--post-training sft|dpo|rlvr]
+  --entitlement <entitlement-id> \
+  --artifact-ref <immutable-training-manifest-ref> \
+  --image-digest <sha256:image-digest> \
+  --max-runtime-seconds <ceiling> \
+  --max-incremental-cost-usd <ceiling> \
+  --idempotency-key <opaque-id> \
+  [--checkpoint-ref <server-managed-ref>]
+
+The exact manifest and ceilings require a short-lived, single-use human
+confirmation from the portal in `ITO_WORKLOAD_CONFIRMATION_TOKEN`. Never put
+that token, dataset/model secrets, raw paths, node addresses, or SSH material in
+arguments, files, logs, or chat.
 ```
+
+## Lifecycle, checkpoints, and portal handoff
+
+Return the server-issued run reference to the portal for its audit trail.
+Checkpoint inputs and outputs are opaque server-managed references; ECC never
+receives storage credentials or raw cluster paths. Confirmation is consumed
+only by `train` and must not be forwarded to lifecycle actions.
+
+```sh
+ecc ito workload-cancel --run <run-id>
+ecc ito workload-cleanup --run <run-id>
+```
+
+Cancellation asks the executor to stop and preserve checkpoint policy; cleanup
+revokes workload-scoped credentials and removes eligible ephemeral artifacts.
+Neither operation terminates the paid entitlement. Inspect state with
+`ecc ito workload-status --run <run-id>`. Logs remain portal/control-plane
+evidence; never use direct SSH, SSH material, or node addresses, and do not
+claim training success without terminal checkpoint/evaluation evidence.
 
 ## What the backend does (Layer 0.3)
 
@@ -53,8 +77,10 @@ gates and never overrides one:
 Emits desk telemetry (goodput, interruption rate, checkpoint bandwidth) so the
 desk prices training blocks honestly.
 
-## Unavailable today
+## Availability boundary
 
-Not yet wired: the canonical CLI's `run` verb and the desk `training-run`
-backend are scaffolds. Until they land, this skill reports the missing
-capability and stops. Never substitute a local trainer or a purchase endpoint.
+The canonical CLI contains an executable contract and mock-tested orchestrator,
+but production entitlement, confirmation, credential-broker, and executor
+adapters are not yet configured. Without them it fails closed before contacting
+a node or provider. Never substitute direct SSH, a local trainer, an arbitrary
+`run` command, or a purchase endpoint.

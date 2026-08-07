@@ -1,6 +1,6 @@
 ---
 name: ito-compute
-description: Query live GPU inventory, submit an authenticated Itô fixed-rate RFQ, inspect RFQ or procurement status, revoke device credentials, and run explicitly gated node qualification through the separately installed canonical CLI. Use when a user asks to find H100/H200 capacity, request a fixed compute rate, check Itô compute status, validate GPU nodes, revoke Itô access, or rent or purchase GPU compute and needs the supported boundary explained.
+description: Query live GPU inventory, submit an authenticated Itô fixed-rate RFQ, inspect RFQ or procurement status, revoke device credentials, run explicitly gated node qualification, and hand an active entitlement to typed inference or training workflows through the separately installed canonical CLI. Use when a user asks to find GPU capacity, check or revoke Itô access, or rent or purchase GPU compute and needs the supported boundary explained.
 ---
 
 # Itô Compute
@@ -80,6 +80,30 @@ key or token in arguments, tracked files, MCP results, logs, or chat.
 Inventory prices are indicative. An RFQ is not reserved capacity. Treat a rate
 as fixed only when the canonical result contains a non-null firm quote.
 
+## Entitlement-to-workload handoff
+
+After procurement, require the canonical control plane to return a
+server-verified, active entitlement. An RFQ, booking identifier, portal memory,
+node address, or SSH material is not workload authority. The portal must show
+the exact immutable manifest, runtime ceiling, incremental-cost ceiling, and
+entitlement to the user before issuing a short-lived, single-use
+`ITO_WORKLOAD_CONFIRMATION_TOKEN`.
+
+Use `ecc ito serve` or `ecc ito train` only through the corresponding skill.
+Confirmation is required only to start a workload. Later lifecycle operations
+are typed by the server-issued run reference:
+
+```sh
+ecc ito workload-cancel --run <run-id>
+ecc ito workload-cleanup --run <run-id>
+```
+
+Cancellation requests that execution stop; cleanup revokes workload-scoped
+credentials and removes eligible ephemeral artifacts. Neither operation
+terminates the paid compute entitlement. Use
+`ecc ito workload-status --run <run-id>` for typed state reads. Logs remain
+portal/control-plane audit evidence and must never be retrieved by direct SSH.
+
 ## Live node qualification
 
 `ecc ito evals` exposes the canonical CLI's narrow live adapter to a separately
@@ -134,18 +158,12 @@ The server exposes only:
 `ito_auth`, gather explicit buyer authority and every hard constraint, call
 `ito_find`, then poll with `ito_status` when needed.
 
-## Rent or purchase semantics
-
-`find` submits an RFQ and may return a firm quote, but it does not rent,
-purchase, reserve, provision, or move funds. `status` is read-oriented, though
-the provider endpoint may reconcile an existing procurement order. The passive
-dashboard link in ECC help is a separate user-operated web route; do not open or
-operate it as a substitute for a missing CLI capability.
-
 ## Unsupported operations
 
-The supported client surface cannot lock quotes, reserve capacity, execute
-workloads, or serve inference. The MCP server does not expose qualification;
-use the explicit CLI command above. Do not invent additional tools or a
-purchase path. Do not substitute a browser or fixture when the local CLI is
-missing or a live operation fails. Report the missing capability and stop.
+The supported client surface cannot lock quotes, reserve capacity, terminate an
+entitlement, expose raw cluster credentials, or provide arbitrary node access.
+The MCP server does not expose qualification or workloads; use the explicit CLI
+commands above. Never use direct SSH or pass node addresses, secret values, or
+arbitrary commands through the workload bridge. Do not invent additional tools
+or a purchase path. If the canonical adapter is unavailable, report that exact
+boundary and stop.

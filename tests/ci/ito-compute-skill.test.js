@@ -80,6 +80,28 @@ function main() {
       assert.match(interfaceMetadata, /display_name: "Itô Compute"/);
       assert.match(interfaceMetadata, /default_prompt: .*\$ito-compute/);
     }],
+    ["documents the entitlement-gated workload lifecycle without inventing node access", () => {
+      const compute = read("skills/ito-compute/SKILL.md");
+      const inference = read("skills/ito-inference/SKILL.md");
+      const training = read("skills/ito-training/SKILL.md");
+      for (const source of [compute, inference, training]) {
+        assert.match(source, /server-verified[^.]*entitlement/i);
+        assert.match(source, /workload-cancel/i);
+        assert.match(source, /workload-cleanup/i);
+        assert.match(source, /does not terminate|do not terminate|never terminate|neither operation\s+terminates/i);
+        assert.match(source, /status/i);
+        assert.match(source, /logs/i);
+        assert.match(source, /workload-status/i);
+        assert.match(source, /logs remain portal\/control-plane|logs remain[^.]*portal/i);
+        assert.match(source, /portal/i);
+        assert.match(source, /never.*(?:direct SSH|SSH material|node addresses)/is);
+      }
+      assert.match(inference, /ecc ito serve/);
+      assert.match(training, /ecc ito train/);
+      assert.match(training, /checkpoint-ref/);
+      assert.match(inference, /ITO_WORKLOAD_CONFIRMATION_TOKEN/);
+      assert.match(training, /ITO_WORKLOAD_CONFIRMATION_TOKEN/);
+    }],
     ["keeps README and integration docs aligned with the separated auth contract", () => {
       for (const relativePath of [
         "README.md",

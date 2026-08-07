@@ -153,6 +153,110 @@ async function main() {
         fs.rmSync(probe.directory, { recursive: true, force: true });
       }
     }],
+    ["gates typed workloads on a portal confirmation and strips unrelated secrets", () => {
+      const args = [
+        "ito", "serve",
+        "--entitlement", "ent_001",
+        "--artifact-ref", "model:hf-test@sha256:abc",
+        "--image-digest", `sha256:${"d".repeat(64)}`,
+        "--max-runtime-seconds", "300",
+        "--max-incremental-cost-usd", "0",
+        "--idempotency-key", "idem_001",
+      ];
+      const denied = makeItoProbe();
+      try {
+        const result = runCli(args, { ECC_ITO_CLI_EXECUTABLE: denied.executable });
+        assert.notStrictEqual(result.status, 0);
+        assert.match(result.stderr, /portal-issued ITO_WORKLOAD_CONFIRMATION_TOKEN/i);
+        assert.ok(!fs.existsSync(denied.log));
+      } finally {
+        fs.rmSync(denied.directory, { recursive: true, force: true });
+      }
+
+      const allowed = makeItoProbe();
+      try {
+        const result = runCli(args, {
+          ECC_ITO_CLI_EXECUTABLE: allowed.executable,
+          ITO_WORKLOAD_CONFIRMATION_TOKEN: "one-time-human-confirmation",
+          ITO_API_KEY: `ito_${"a".repeat(32)}`,
+          AWS_SECRET_ACCESS_KEY: "must-not-cross",
+          HF_TOKEN: "must-not-cross",
+          SSH_AUTH_SOCK: "/tmp/must-not-cross.sock",
+        });
+        assert.strictEqual(result.status, 0, result.stderr);
+        const invocation = readInvocation(allowed);
+        assert.deepStrictEqual(invocation.argv, args.slice(1));
+        assert.strictEqual(invocation.env.ITO_WORKLOAD_CONFIRMATION_TOKEN, "one-time-human-confirmation");
+        assert.strictEqual(invocation.env.AWS_SECRET_ACCESS_KEY, undefined);
+        assert.strictEqual(invocation.env.HF_TOKEN, undefined);
+        assert.strictEqual(invocation.env.SSH_AUTH_SOCK, undefined);
+      } finally {
+        fs.rmSync(allowed.directory, { recursive: true, force: true });
+      }
+    }],
+    ["rejects untyped workload, node-access, and secret arguments before spawning", () => {
+      const base = [
+        "ito", "train",
+        "--entitlement", "ent_001",
+        "--artifact-ref", "training:manifest_001",
+        "--image-digest", `sha256:${"d".repeat(64)}`,
+        "--max-runtime-seconds", "300",
+        "--max-incremental-cost-usd", "0",
+        "--idempotency-key", "idem_001",
+      ];
+      for (const extra of [
+        ["--ssh-key", "/tmp/id_ed25519"],
+        ["--node", "gpu-01"],
+        ["--token", "secret-in-argv"],
+        ["--command", "curl metadata"],
+        ["positional-command"],
+      ]) {
+        const probe = makeItoProbe();
+        try {
+          const result = runCli([...base, ...extra], {
+            ECC_ITO_CLI_EXECUTABLE: probe.executable,
+            ITO_WORKLOAD_CONFIRMATION_TOKEN: "one-time-human-confirmation",
+          });
+          assert.notStrictEqual(result.status, 0, extra.join(" "));
+          assert.match(result.stderr, /only typed workload options/i);
+          assert.ok(!fs.existsSync(probe.log), `${extra[0]} must be rejected before spawn`);
+        } finally {
+          fs.rmSync(probe.directory, { recursive: true, force: true });
+        }
+      }
+    }],
+    ["keeps confirmation start-only and types cancellation and cleanup", () => {
+      for (const command of ["workload-status", "workload-cancel", "workload-cleanup"]) {
+        const probe = makeItoProbe();
+        try {
+          const result = runCli(["ito", command, "--run", "run_001"], {
+            ECC_ITO_CLI_EXECUTABLE: probe.executable,
+            ITO_API_KEY: "ito_test_key",
+            ITO_WORKLOAD_CONFIRMATION_TOKEN: "must-not-cross",
+            SSH_AUTH_SOCK: "/tmp/must-not-cross.sock",
+          });
+          assert.strictEqual(result.status, 0, result.stderr);
+          const invocation = readInvocation(probe);
+          assert.deepStrictEqual(invocation.argv, [command, "--run", "run_001"]);
+          assert.strictEqual(invocation.env.ITO_WORKLOAD_CONFIRMATION_TOKEN, undefined);
+          assert.strictEqual(invocation.env.SSH_AUTH_SOCK, undefined);
+        } finally {
+          fs.rmSync(probe.directory, { recursive: true, force: true });
+        }
+
+        const denied = makeItoProbe();
+        try {
+          const result = runCli(["ito", command, "--run", "run_001", "--force"], {
+            ECC_ITO_CLI_EXECUTABLE: denied.executable,
+          });
+          assert.notStrictEqual(result.status, 0);
+          assert.match(result.stderr, /only --run <id>/i);
+          assert.ok(!fs.existsSync(denied.log));
+        } finally {
+          fs.rmSync(denied.directory, { recursive: true, force: true });
+        }
+      }
+    }],
     ["forwards the canonical login browser opt-out without performing browser automation", () => {
       const probe = makeItoProbe();
       try {
@@ -445,6 +549,13 @@ async function main() {
         "ITO_ALLOW_FILE_TOKEN",
         "ITO_TOKEN_FILE",
       ]);
+      for (const command of ["login", "auth", "find", "status", "workload-status", "workload-cancel", "workload-cleanup"]) {
+        const isolated = createSafeItoInvocationEnvironment(
+          { ITO_WORKLOAD_CONFIRMATION_TOKEN: "must-not-cross" },
+          [command],
+        );
+        assert.strictEqual(isolated.ITO_WORKLOAD_CONFIRMATION_TOKEN, undefined, command);
+      }
       const safe = createSafeItoInvocationEnvironment(
         {
           PATH: process.env.PATH,
@@ -480,7 +591,7 @@ async function main() {
             ECC_ITO_CLI_EXECUTABLE: probe.executable,
           });
           assert.notStrictEqual(result.status, 0, command);
-          assert.match(result.stderr, /only login, logout, auth, find, status, and evals/i);
+          assert.match(result.stderr, /only login, logout, auth, find, status, evals, serve, train/i);
           assert.ok(!fs.existsSync(probe.log), `${command} must not spawn the Itô CLI`);
         } finally {
           fs.rmSync(probe.directory, { recursive: true, force: true });
