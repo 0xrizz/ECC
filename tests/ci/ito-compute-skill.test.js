@@ -101,6 +101,14 @@ function main() {
       assert.match(training, /checkpoint-ref/);
       assert.match(inference, /ITO_WORKLOAD_CONFIRMATION_TOKEN/);
       assert.match(training, /ITO_WORKLOAD_CONFIRMATION_TOKEN/);
+      for (const source of [inference, training]) {
+        assert.match(source, /untrusted data/i);
+        assert.match(source, /must never change agent identity/i);
+        assert.match(source, /expand tool scope/i);
+        assert.match(source, /bypass\s+confirmation/i);
+        assert.match(source, /disclose secrets/i);
+        assert.match(source, /execution is \*\*NOT READY\*\*/i);
+      }
     }],
     ["keeps README and integration docs aligned with the separated auth contract", () => {
       for (const relativePath of [
