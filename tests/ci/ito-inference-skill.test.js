@@ -46,12 +46,12 @@ const results = [
     assert.match(skill, /never substitute direct SSH, a local runner, or a purchase\s+endpoint/i);
     assert.match(skill, /Actual serving execution is \*\*NOT READY\*\*/i);
     assert.doesNotMatch(skill, /ssh\s+root@|serve-status\.sh/i);
-    assert.doesNotMatch(skill, /--confirmation-token|--api-key|--access-token/i);
+    assert.doesNotMatch(skill, /ITO_WORKLOAD_CONFIRMATION_TOKEN|--confirmation-token|--api-key|--access-token/i);
   }),
   test("routes typed serving through the bridge while rejecting the superseded interface", () => {
     const bridge = read("scripts/ito.js");
     assert.match(bridge, /SUPPORTED_COMMANDS[\s\S]*?"serve"/);
-    assert.doesNotMatch(bridge, /--confirmation-token/i);
+    assert.doesNotMatch(bridge, /ITO_WORKLOAD_CONFIRMATION_TOKEN|--confirmation-token/i);
 
     const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ecc-ito-serve-reject-"));
     try {
