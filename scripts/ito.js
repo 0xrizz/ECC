@@ -15,8 +15,14 @@ const SUPPORTED_COMMANDS = Object.freeze([
   "serve", "train", "workload-status", "workload-cancel", "workload-cleanup",
 ]);
 const CANONICAL_PACKAGE_PATH = "cli/ito-compute-cli";
-const CANONICAL_ENTRY_SEGMENTS = Object.freeze([
+const SOURCE_CANONICAL_ENTRY_SEGMENTS = Object.freeze([
   ...CANONICAL_PACKAGE_PATH.split("/"),
+  "dist",
+  "bin",
+  "ito.js",
+]);
+const NPM_CANONICAL_ENTRY_SEGMENTS = Object.freeze([
+  "ito-compute-cli",
   "dist",
   "bin",
   "ito.js",
@@ -213,6 +219,10 @@ function parseArgs(argv, environment = process.env) {
       "--entitlement", "--artifact-ref", "--image-digest",
       "--max-runtime-seconds", "--max-incremental-cost-usd", "--idempotency-key",
     ], ["--checkpoint-ref"]);
+    const costIndex = withoutJson.indexOf("--max-incremental-cost-usd");
+    if (withoutJson[costIndex + 1] !== "0") {
+      throw new Error("--max-incremental-cost-usd must be exactly 0 until workload accounting is deployed.");
+    }
   }
   if (command === "workload-status" || command === "workload-cancel" || command === "workload-cleanup") {
     validateRunLifecycleArgs(withoutJson);
@@ -275,13 +285,15 @@ function isCanonicalItoEntry(candidate) {
     .normalize(candidate)
     .split(path.sep)
     .filter(Boolean);
-  if (pathSegments.length < CANONICAL_ENTRY_SEGMENTS.length) return false;
-  const candidateTail = pathSegments.slice(-CANONICAL_ENTRY_SEGMENTS.length);
-  return candidateTail.every((segment, index) => {
-    const expected = CANONICAL_ENTRY_SEGMENTS[index];
-    return process.platform === "win32"
-      ? segment.toLowerCase() === expected.toLowerCase()
-      : segment === expected;
+  return [SOURCE_CANONICAL_ENTRY_SEGMENTS, NPM_CANONICAL_ENTRY_SEGMENTS].some((expectedSegments) => {
+    if (pathSegments.length < expectedSegments.length) return false;
+    const candidateTail = pathSegments.slice(-expectedSegments.length);
+    return candidateTail.every((segment, index) => {
+      const expected = expectedSegments[index];
+      return process.platform === "win32"
+        ? segment.toLowerCase() === expected.toLowerCase()
+        : segment === expected;
+    });
   });
 }
 

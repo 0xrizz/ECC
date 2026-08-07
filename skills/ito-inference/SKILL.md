@@ -30,7 +30,7 @@ ecc ito serve \
   --artifact-ref <immutable-model-ref> \
   --image-digest <sha256:image-digest> \
   --max-runtime-seconds <ceiling> \
-  --max-incremental-cost-usd <ceiling> \
+  --max-incremental-cost-usd 0 \
   --idempotency-key <opaque-id>
 ```
 
@@ -65,7 +65,8 @@ addresses, and do not claim endpoint readiness without functional evidence.
 
 ## What the backend does (Layer 0.2)
 
-The desk backend, not ECC, runs the stages, and this skill only reports them:
+These stages are the target acceptance contract for a future reviewed provider
+adapter; they are not claims about deployed execution today:
 
 1. Fabric gate — never launch on unverified metal. Blocks below 80% of
    fabric-expected bus bandwidth; advisory between 80% and 92%; fails loud on
