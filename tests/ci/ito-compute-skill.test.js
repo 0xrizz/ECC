@@ -102,7 +102,6 @@ function main() {
       assert.deepStrictEqual(module.paths, [
         "skills/ito-compute",
         "skills/ito-inference",
-        "skills/ito-training",
       ]);
       assert.deepStrictEqual(module.dependencies, ["platform-configs"]);
       assert.strictEqual(module.defaultInstall, false);

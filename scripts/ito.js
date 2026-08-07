@@ -10,7 +10,8 @@ const {
   getInvocationCommand,
 } = require("./lib/ito-environment");
 
-const SUPPORTED_COMMANDS = Object.freeze(["login", "logout", "auth", "find", "status", "evals"]);
+const TRAINING_COMMANDS = Object.freeze(["train-launch", "train-status", "train-logs", "train-resume", "train-cancel", "train-cleanup"]);
+const SUPPORTED_COMMANDS = Object.freeze(["login", "logout", "auth", "find", "status", "evals", ...TRAINING_COMMANDS]);
 const CANONICAL_REPOSITORY = "https://github.com/Ito-Markets/ito-cloud-runtime.git";
 const CANONICAL_PACKAGE_PATH = "cli/ito-compute-cli";
 const CANONICAL_ENTRY_SEGMENTS = Object.freeze([
@@ -33,8 +34,14 @@ Usage:
   ecc ito auth
   ecc ito find <all required RFQ options>
   ecc ito status
+  ecc ito train-launch <all required workload options and exact confirmation>
+  ecc ito train-status --run <id>
+  ecc ito train-logs --run <id>
+  ecc ito train-resume <checkpoint, additional cost limit, exact confirmation>
+  ecc ito train-cancel --run <id> --confirm "CANCEL <id>"
+  ecc ito train-cleanup --run <id> --confirm "CLEANUP <id>"
   ecc ito evals --cluster <id> --live-sixtytwo --nodes <list> --config-dir <dir>
-  ecc ito <login|logout|auth|find|status|evals> --json
+  ecc ito <login|logout|auth|find|status|evals|train-*> --json
 
 The bridge invokes the separately installed canonical Itô CLI and returns its
 real stdout, stderr, and exit code unchanged. "ecc ito login" delegates to the
@@ -50,6 +57,8 @@ Important:
   - "find" reads live inventory and submits an authenticated RFQ.
   - Obtain explicit buyer authority and every hard constraint before invoking it.
   - "status" reads live RFQ and procurement status.
+  - Training verbs are passed only to the canonical CLI, which enforces live
+    entitlement, booking topology, cost ceilings, and exact confirmations.
   - "evals" invokes only the canonical CLI's double-opt-in, pinned
     sixtytwo-cli node-qualification adapter against explicit nodes.
   - Node qualification cannot rent, launch, recover, repair, or purchase.
@@ -164,7 +173,7 @@ function parseArgs(argv, environment = process.env) {
   const command = withoutJson.shift();
   if (!SUPPORTED_COMMANDS.includes(command)) {
     throw new Error(
-      `Unsupported Itô command "${command || "(missing)"}"; ECC permits only login, logout, auth, find, status, and evals.`
+      `Unsupported Itô command "${command || "(missing)"}"; ECC permits only login, logout, auth, find, status, evals, and the canonical train-* lifecycle.`
     );
   }
   if (command === "auth" && withoutJson.includes("--no-browser")) {

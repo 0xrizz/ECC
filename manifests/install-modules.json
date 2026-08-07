@@ -608,8 +608,7 @@
       "description": "Authenticated Itô GPU inventory, RFQ, status, device revocation, and explicitly gated node-qualification workflows through the separately installed canonical CLI.",
       "paths": [
         "skills/ito-compute",
-        "skills/ito-inference",
-        "skills/ito-training"
+        "skills/ito-inference"
       ],
       "targets": [
         "claude",
@@ -637,7 +636,7 @@
     {
       "id": "ito-training",
       "kind": "skills",
-      "description": "Fail-closed Itô training workload planning for completed compute bookings; execution remains unavailable until the canonical backend ships it.",
+      "description": "Entitlement-bound Itô training planning and lifecycle operations through the canonical CLI; actions remain blocked while the live capability is disabled.",
       "paths": [
         "skills/ito-training"
       ],

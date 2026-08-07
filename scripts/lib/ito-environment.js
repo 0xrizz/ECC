@@ -45,7 +45,7 @@ const ECC_ITO_CONTROL_KEYS = Object.freeze([
   "ECC_ITO_CLI_EXECUTABLE",
   "NODE_ENV",
 ]);
-const ITO_RUNTIME_COMMANDS = new Set(["login", "logout", "auth", "find", "status"]);
+const ITO_RUNTIME_COMMANDS = new Set(["login", "logout", "auth", "find", "status", "train-launch", "train-status", "train-logs", "train-resume", "train-cancel", "train-cleanup"]);
 
 function copyDefined(source, target, key) {
   if (typeof source[key] === "string") {
@@ -97,7 +97,7 @@ function createSafeItoInvocationEnvironment(
   return createSafeItoEnvironment(source, {
     includeControls: options.includeControls === true,
     includeItoRuntime: ITO_RUNTIME_COMMANDS.has(command),
-    includeItoApiKey: ["auth", "find", "status"].includes(command),
+    includeItoApiKey: ["auth", "find", "status"].includes(command) || command?.startsWith("train-") === true,
     includeItoEvals: command === "evals",
   });
 }

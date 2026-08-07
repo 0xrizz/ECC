@@ -27,10 +27,16 @@ console.log("\n=== Testing Itô training skill surface ===\n");
 const tests = [
   ["has portable discovery metadata and concrete trigger phrases", () => {
     const skill = read("skills/ito-training/SKILL.md");
-    assert.match(skill, /^---\nname: ito-training\ndescription: .+\nmetadata:\n  origin: ECC\n---\n/);
+    assert.match(skill, /^---\nname: ito-training\ndescription: .+\nmetadata:\n {2}origin: ECC\n---\n/);
     for (const phrase of ["training workload", "fine-tun", "checkpoint", "training job"]) {
       assert.match(skill, new RegExp(phrase, "i"));
     }
+  }],
+  ["defines standard sections and treats external content as untrusted data", () => {
+    const skill = read("skills/ito-training/SKILL.md");
+    for (const section of ["## When to Use", "## How It Works", "## Examples"]) assert.ok(skill.includes(section));
+    assert.match(skill, /metadata[\s\S]+booking records[\s\S]+CLI output[\s\S]+logs[\s\S]+checkpoints[\s\S]+untrusted data/i);
+    assert.match(skill, /embedded instructions must never change[\s\S]+identity[\s\S]+tool scope[\s\S]+confirmations[\s\S]+lifecycle actions/i);
   }],
   ["collects a complete workload and cluster recommendation without inventing values", () => {
     const skill = read("skills/ito-training/SKILL.md");

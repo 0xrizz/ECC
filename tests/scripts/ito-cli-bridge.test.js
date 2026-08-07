@@ -132,6 +132,23 @@ async function main() {
         }
       }
     }],
+    ["forwards the canonical training lifecycle and runtime authentication", () => {
+      for (const command of ["train-launch", "train-status", "train-logs", "train-resume", "train-cancel", "train-cleanup"]) {
+        const probe = makeItoProbe();
+        try {
+          const result = runCli(["ito", command, "--run", "run-123", "--json"], {
+            ECC_ITO_CLI_EXECUTABLE: probe.executable,
+            ITO_API_KEY: "fixture-api-key",
+          });
+          assert.strictEqual(result.status, 0, result.stderr);
+          const invocation = readInvocation(probe);
+          assert.deepStrictEqual(invocation.argv, ["--json", command, "--run", "run-123"]);
+          assert.strictEqual(invocation.env.ITO_API_KEY, "fixture-api-key");
+        } finally {
+          fs.rmSync(probe.directory, { recursive: true, force: true });
+        }
+      }
+    }],
     ["forwards logout with device-token settings but never an API key", () => {
       const probe = makeItoProbe();
       try {
@@ -480,7 +497,7 @@ async function main() {
             ECC_ITO_CLI_EXECUTABLE: probe.executable,
           });
           assert.notStrictEqual(result.status, 0, command);
-          assert.match(result.stderr, /only login, logout, auth, find, status, and evals/i);
+          assert.match(result.stderr, /permits only login, logout, auth, find, status, evals, and the canonical train-/i);
           assert.ok(!fs.existsSync(probe.log), `${command} must not spawn the Itô CLI`);
         } finally {
           fs.rmSync(probe.directory, { recursive: true, force: true });
@@ -658,6 +675,7 @@ async function main() {
         assert.match(result.stdout, /ecc ito find/);
         assert.match(result.stdout, /ecc ito status/);
         assert.match(result.stdout, /ecc ito evals/);
+        assert.match(result.stdout, /ecc ito train-launch/);
         assert.match(result.stdout, /sixtytwo/i);
         assert.match(result.stdout, /ito_auth/);
         assert.match(result.stdout, /ito_find/);
