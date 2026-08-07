@@ -29,7 +29,7 @@ ecc ito train \
   --artifact-ref <immutable-training-manifest-ref> \
   --image-digest <sha256:image-digest> \
   --max-runtime-seconds <ceiling> \
-  --max-incremental-cost-usd <ceiling> \
+  --max-incremental-cost-usd 0 \
   --idempotency-key <opaque-id> \
   [--checkpoint-ref <server-managed-ref>]
 ```
@@ -77,8 +77,9 @@ cancel/cleanup lifecycle.
 
 ## What the backend does (Layer 0.3)
 
-The desk backend runs a staged, eval-gated pipeline; this skill reports stage
-gates and never overrides one:
+These stages are target acceptance contracts for the future reviewed provider
+adapter; they are not evidence that a live adapter exists today. ECC reports
+stage gates and never overrides one:
 
 1. Data prep — manifest, dedup, decontamination against the eval suite;
    150M-ladder decision job as the cheap pre-check for custom data.

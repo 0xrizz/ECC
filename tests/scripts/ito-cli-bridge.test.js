@@ -63,18 +63,12 @@ function runCliAndObserveFirstOutput(args, environment = {}) {
   });
 }
 
-function makeItoProbe(exitCode = 0) {
+function makeItoProbe(exitCode = 0, layout = "source") {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "ecc-ito-cli-"));
   const log = path.join(directory, "invocation.json");
-  const script = path.join(
-    directory,
-    "ito-cloud-runtime",
-    "cli",
-    "ito-compute-cli",
-    "dist",
-    "bin",
-    "ito.js"
-  );
+  const script = layout === "global"
+    ? path.join(directory, "lib", "node_modules", "ito-compute-cli", "dist", "bin", "ito.js")
+    : path.join(directory, "ito-cloud-runtime", "cli", "ito-compute-cli", "dist", "bin", "ito.js");
   const executable = script;
   fs.mkdirSync(path.dirname(script), { recursive: true });
   fs.writeFileSync(
@@ -181,6 +175,31 @@ async function main() {
         assert.strictEqual(invocation.env.SSH_AUTH_SOCK, undefined);
       } finally {
         fs.rmSync(allowed.directory, { recursive: true, force: true });
+      }
+    }],
+    ["accepts the verified global npm package entry without PATH discovery", () => {
+      const probe = makeItoProbe(0, "global");
+      try {
+        const result = runCli(["ito", "status"], { ECC_ITO_CLI_EXECUTABLE: probe.executable });
+        assert.strictEqual(result.status, 0, result.stderr);
+        assert.deepStrictEqual(readInvocation(probe).argv, ["status"]);
+      } finally {
+        fs.rmSync(probe.directory, { recursive: true, force: true });
+      }
+    }],
+    ["rejects nonzero incremental workload cost before spawning", () => {
+      const probe = makeItoProbe();
+      try {
+        const result = runCli([
+          "ito", "serve", "--entitlement", "ent_001", "--artifact-ref", "model:rev",
+          "--image-digest", `sha256:${"d".repeat(64)}`, "--max-runtime-seconds", "300",
+          "--max-incremental-cost-usd", "1", "--idempotency-key", "idem_001",
+        ], { ECC_ITO_CLI_EXECUTABLE: probe.executable });
+        assert.notStrictEqual(result.status, 0);
+        assert.match(result.stderr, /must be exactly 0/i);
+        assert.ok(!fs.existsSync(probe.log));
+      } finally {
+        fs.rmSync(probe.directory, { recursive: true, force: true });
       }
     }],
     ["rejects untyped workload, node-access, and secret arguments before spawning", () => {
