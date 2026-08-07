@@ -649,6 +649,7 @@ function runTests() {
         scriptPath,
         '--profile', 'core',
         '--with', 'capability:security',
+        '--enable-hooks',
       ], {
         cwd: projectDir,
         env: { ...process.env, HOME: homeDir },
@@ -688,6 +689,7 @@ function runTests() {
         scriptPath,
         '--profile', 'developer',
         '--without', 'capability:orchestration',
+        '--enable-hooks',
       ], {
         cwd: projectDir,
         env: { ...process.env, HOME: homeDir },

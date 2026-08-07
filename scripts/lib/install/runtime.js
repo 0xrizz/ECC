@@ -5,12 +5,17 @@ const {
   createLegacyInstallPlan,
   createManifestInstallPlan,
 } = require('../install-executor');
+const { withHookConsent } = require('./hook-consent');
 
 function createInstallPlanFromRequest(request, options = {}) {
   if (!request || typeof request !== 'object') {
     throw new Error('A normalized install request is required');
   }
 
+  return withHookConsent(createRawInstallPlan(request, options), request.hookConsent || null);
+}
+
+function createRawInstallPlan(request, options = {}) {
   if (request.mode === 'manifest') {
     return createManifestInstallPlan({
       target: request.target,

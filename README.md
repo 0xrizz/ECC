@@ -361,13 +361,19 @@ For the normal core profile with hooks disabled:
 
 ```bash
 ./install.sh --profile core --without baseline:hooks --target claude
+./install.sh --profile core --no-hooks --target claude
 ```
 
 Add the hook runtime later only if you want it:
 
 ```bash
-./install.sh --target claude --modules hooks-runtime
+./install.sh --target claude --modules hooks-runtime --enable-hooks
 ```
+
+Any install whose profile or modules would materialize the hook runtime requires
+an explicit decision. Without `--enable-hooks` or `--no-hooks`, the installer
+prints what the hooks can do and stops before writing anything. The guided
+installer (`ecc install --guided`) asks for this choice interactively.
 </details>
 
 <details>

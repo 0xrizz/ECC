@@ -98,7 +98,7 @@ function runTests() {
     const projectRoot = createTempDir('repair-project-');
 
     try {
-      const installResult = runNode(INSTALL_SCRIPT, ['--target', 'cursor', 'typescript'], {
+      const installResult = runNode(INSTALL_SCRIPT, ['--target', 'cursor', 'typescript', '--enable-hooks'], {
         cwd: projectRoot,
         homeDir,
       });
