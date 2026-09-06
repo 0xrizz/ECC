@@ -54,6 +54,11 @@ function writeLegacySourceFixture(root) {
   writeFile(root, path.join('rules', 'common', 'nested', 'shared.md'), '# Shared\n');
   writeFile(root, path.join('rules', 'common', 'node_modules', 'ignored.md'), '# Ignored\n');
   writeFile(root, path.join('rules', 'common', '.git', 'ignored.md'), '# Ignored\n');
+  writeFile(root, path.join('rules', 'common', '__pycache__', 'ignored.cpython-314.pyc'), 'ignored\n');
+  writeFile(root, path.join('rules', 'common', '.pytest_cache', 'ignored.md'), '# Ignored\n');
+  writeFile(root, path.join('rules', 'common', 'stray.pyc'), 'ignored\n');
+  writeFile(root, path.join('rules', 'common', 'stray.pyo'), 'ignored\n');
+  writeFile(root, path.join('rules', 'common', 'stray.pyd'), 'ignored\n');
   writeFile(root, path.join('rules', 'typescript', 'testing.md'), '# TS\n');
   writeFile(root, path.join('rules', 'python', 'testing.md'), '# Python\n');
 
@@ -111,6 +116,11 @@ function writeManifestSourceFixture(root) {
   writeFile(root, path.join('src', 'nested', 'feature.js'), 'console.log("feature");\n');
   writeFile(root, path.join('src', 'node_modules', 'ignored.js'), 'console.log("ignored");\n');
   writeFile(root, path.join('src', '.git', 'ignored.js'), 'console.log("ignored");\n');
+  writeFile(root, path.join('src', '__pycache__', 'ignored.cpython-314.pyc'), 'ignored\n');
+  writeFile(root, path.join('src', '.pytest_cache', 'ignored.md'), '# Ignored\n');
+  writeFile(root, path.join('src', 'stray.pyc'), 'ignored\n');
+  writeFile(root, path.join('src', 'stray.pyo'), 'ignored\n');
+  writeFile(root, path.join('src', 'stray.pyd'), 'ignored\n');
   writeFile(root, path.join('src', 'nested', 'ecc-install-state.json'), '{}\n');
   writeFile(root, path.join('rules', 'common', 'coding-style.md'), '# Common\n');
   writeFile(root, path.join('skills', 'demo', 'SKILL.md'), '# Demo\n');
@@ -192,6 +202,9 @@ function runTests() {
       assert.ok(operationFor(plan, path.join('custom-rules', 'typescript', 'testing.md')));
       assert.ok(!plan.operations.some(operation => operation.sourceRelativePath.includes('node_modules')));
       assert.ok(!plan.operations.some(operation => operation.sourceRelativePath.includes('.git')));
+      assert.ok(!plan.operations.some(operation => operation.sourceRelativePath.includes('__pycache__')));
+      assert.ok(!plan.operations.some(operation => operation.sourceRelativePath.includes('.pytest_cache')));
+      assert.ok(!plan.operations.some(operation => /\.(?:pyc|pyo|pyd)$/.test(operation.sourceRelativePath)));
       assert.deepStrictEqual(plan.statePreview.request.legacyLanguages, ['typescript', 'missing-lang', '../bad']);
       assert.strictEqual(plan.statePreview.request.legacyMode, true);
       assert.strictEqual(plan.statePreview.source.repoVersion, '9.8.7');
@@ -297,7 +310,7 @@ function runTests() {
     const homeDir = createTempDir('install-executor-home-');
     try {
       writeLegacySourceFixture(sourceRoot);
-      writeFile(projectRoot, path.join('.agent', 'rules', 'existing.md'), '# Existing\n');
+      writeFile(projectRoot, path.join('.agents', 'rules', 'existing.md'), '# Existing\n');
 
       const plan = createLegacyInstallPlan({
         sourceRoot,
@@ -307,15 +320,21 @@ function runTests() {
         languages: ['typescript', 'missing-lang', 'bad/name'],
       });
 
-      assert.strictEqual(plan.installRoot, path.join(projectRoot, '.agent'));
+      assert.strictEqual(plan.installRoot, path.join(projectRoot, '.agents'));
       assert.ok(plan.warnings.some(warning => warning.includes('files may be overwritten')));
       assert.ok(plan.warnings.some(warning => warning.includes("rules/missing-lang/ does not exist")));
       assert.ok(plan.warnings.some(warning => warning.includes("Invalid language name 'bad/name'")));
-      assert.ok(operationFor(plan, path.join('.agent', 'rules', 'common-coding-style.md')));
-      assert.ok(operationFor(plan, path.join('.agent', 'rules', 'typescript-testing.md')));
-      assert.ok(operationFor(plan, path.join('.agent', 'workflows', 'plan.md')));
-      assert.ok(operationFor(plan, path.join('.agent', 'skills', 'architect.md')));
-      assert.ok(operationFor(plan, path.join('.agent', 'skills', 'demo', 'SKILL.md')));
+      assert.ok(operationFor(plan, path.join('.agents', 'rules', 'common-coding-style.md')));
+      assert.ok(operationFor(plan, path.join('.agents', 'rules', 'typescript-testing.md')));
+      assert.ok(operationFor(plan, path.join('.agents', 'workflows', 'plan.md')));
+      const agentOperation = plan.operations.find(operation => (
+        operation.destinationPath.endsWith(path.join('.agents', 'agents', 'architect.md'))
+      ));
+      assert.ok(agentOperation);
+      assert.strictEqual(agentOperation.contentTransform, 'antigravity-agent-frontmatter');
+      assert.ok(plan.operations.some(operation => (
+        operation.destinationPath.endsWith(path.join('.agents', 'skills', 'demo', 'SKILL.md'))
+      )));
       assert.strictEqual(plan.statePreview.target.id, 'antigravity-project');
     } finally {
       cleanup(sourceRoot);
@@ -354,6 +373,9 @@ function runTests() {
       assert.ok(!normalizedSources.includes('src/nested/ecc-install-state.json'));
       assert.ok(!normalizedSources.some(source => source.includes('node_modules')));
       assert.ok(!normalizedSources.some(source => source.includes('.git')));
+      assert.ok(!normalizedSources.some(source => source.includes('__pycache__')));
+      assert.ok(!normalizedSources.some(source => source.includes('.pytest_cache')));
+      assert.ok(!normalizedSources.some(source => /\.(?:pyc|pyo|pyd)$/.test(source)));
       assert.ok(plan.operations.some(operation => (
         operation.sourceRelativePath === path.join('.claude-plugin', 'plugin.json')
         && operation.destinationPath === path.join(homeDir, '.claude', 'plugin.json')
@@ -643,6 +665,7 @@ function runTests() {
         installRoot: targetRoot,
         installStatePath: path.join(targetRoot, 'ecc', 'install-state.json'),
         warnings: [],
+        hookConsent: 'enabled',
         statePreview: {
           target: 'claude',
           adapter: { id: 'claude-home', target: 'claude', kind: 'home' },
